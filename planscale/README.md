@@ -1,32 +1,54 @@
-# React + TypeScript + Vite
+# PlanScale
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A dedicated tool for measuring, scaling, and tracing over PDF / image site & floor
+plans — built to replace the off-label use of audio-sim software (Danley Direct) for
+event planning layout work.
 
-Currently, two official plugins are available:
+## What it does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Import** a PDF (any page) or image (JPG, PNG, WebP, …) — no file-size limit, no
+  compression needed.
+- **Position** the plan: drag to move, rotate, adjust opacity.
+- **Scale by two known points**: click two points a known distance apart, type the real
+  distance, and the whole plan is scaled to real-world size.
+- **Set an origin (0,0)** anywhere; every coordinate is reported relative to it.
+- **Units**: feet + inches (`33' 6"`), decimal feet (`33.500 ft`), or meters — switch
+  any time; everything re-formats live.
+- **Tools**
+  - **Point** — drop a marker and read its coordinates.
+  - **Line** — multi-point path for cable runs around corners; reports total run length
+    and each segment.
+  - **Polygon** — closed shape; reports per-vertex coordinates, perimeter, and area.
+  - **Rectangle / Fan area** — audience-plane style areas (fan has independent near/far
+    widths).
+- **45° / 90° angle snap** and **snap-to-existing-point** while drawing.
+- **Editable tables**: nudge any coordinate/dimension numerically.
+- **Save / load** projects (`.planscale`, image embedded so the file is self-contained).
+- **Export** all coordinates to CSV or copy to clipboard.
 
-## React Compiler
+## Running it (development)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Requires Node.js (already installed).
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install      # first time only
+npm run dev      # then open the printed http://localhost:5173 in Chrome or Edge
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Or double-click **`Start PlanScale.bat`** in the parent folder.
+
+## Keyboard
+
+- **Space** (hold) — pan · **mouse wheel** — zoom
+- **Enter** — finish current line/polygon · **Esc** — cancel · **Backspace** — remove last point
+- **Delete** — delete selected object · **Ctrl+Z / Ctrl+Y** — undo / redo
+
+## Building a standalone app (later)
+
+The app is browser-based today. To ship it as a double-click Windows `.exe`, it can be
+wrapped with Electron (`npm run build` output + an Electron shell). Not set up yet — a
+planned follow-up.
+
+## Tech
+
+Vite · React · TypeScript · Konva (canvas) · pdf.js (PDF rendering) · Zustand (state).

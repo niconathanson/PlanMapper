@@ -1,122 +1,104 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useRef, useState } from 'react';
+import './App.css';
+import type * as pdfjs from 'pdfjs-dist';
+import { useStore } from './core/store';
+import { loadFile, renderPdfPage, type LoadedRaster } from './core/loadFile';
+import { TopBar } from './ui/TopBar';
+import { Toolbar } from './ui/Toolbar';
+import { Sidebar } from './ui/Sidebar';
+import { PagePicker } from './ui/PagePicker';
+import { CanvasStage } from './canvas/CanvasStage';
+import type { PlanImage } from './core/types';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const setImage = useStore((s) => s.setImage);
+  const requestFit = useStore((s) => s.requestFit);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pdfPick, setPdfPick] = useState<{ pdf: pdfjs.PDFDocumentProxy; name: string } | null>(null);
+  const [loadingMsg, setLoadingMsg] = useState<string | null>(null);
+
+  const placeRaster = (r: LoadedRaster) => {
+    // Default placement: image centered on the origin, sized so it's ~20 m wide
+    // until the user scales it precisely with two points.
+    const mPerPx = 20 / r.natW;
+    const img: PlanImage = {
+      id: crypto.randomUUID(),
+      name: r.name,
+      src: r.src,
+      natW: r.natW,
+      natH: r.natH,
+      center: { x: 0, y: 0 },
+      rotationDeg: 0,
+      mPerPx,
+      opacity: 1,
+      visible: true,
+    };
+    setImage(img);
+    setTimeout(() => requestFit(), 30);
+  };
+
+  const handleFiles = async (files: FileList) => {
+    const file = files[0];
+    if (!file) return;
+    setLoadingMsg('Loading…');
+    try {
+      const loaded = await loadFile(file);
+      if (loaded.kind === 'image' && loaded.raster) {
+        placeRaster(loaded.raster);
+      } else if (loaded.kind === 'pdf' && loaded.pdf) {
+        if ((loaded.pageCount ?? 1) === 1) {
+          const r = await renderPdfPage(loaded.pdf, 1, loaded.name);
+          placeRaster(r);
+        } else {
+          setPdfPick({ pdf: loaded.pdf, name: loaded.name });
+        }
+      }
+    } catch (err) {
+      alert('Could not load that file: ' + (err as Error).message);
+    } finally {
+      setLoadingMsg(null);
+    }
+  };
+
+  const triggerImport = () => fileInputRef.current?.click();
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app">
+      <TopBar onImport={triggerImport} />
+      <div className="body">
+        <Toolbar />
+        <CanvasStage onImport={triggerImport} onFiles={handleFiles} />
+        <Sidebar onImport={triggerImport} />
+      </div>
 
-      <div className="ticks"></div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          if (e.target.files?.length) handleFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      {pdfPick && (
+        <PagePicker
+          pdf={pdfPick.pdf}
+          name={pdfPick.name}
+          onPick={(r) => {
+            placeRaster(r);
+            setPdfPick(null);
+          }}
+          onCancel={() => setPdfPick(null)}
+        />
+      )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {loadingMsg && (
+        <div className="modal-back">
+          <div className="modal">{loadingMsg}</div>
+        </div>
+      )}
+    </div>
+  );
 }
-
-export default App
