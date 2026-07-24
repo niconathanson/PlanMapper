@@ -41,6 +41,8 @@ export function CanvasStage({
   const hudRef = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const [shiftHeld, setShiftHeld] = useState(false); // temporary pan
+  const [ctrlHeld, setCtrlHeld] = useState(false); // temporarily disable snapping
   const [dragOver, setDragOver] = useState(false);
   // Drag-to-size state for the rectangle area tool (world meters).
   const [areaDrag, setAreaDrag] = useState<{ start: Vec2; cur: Vec2 } | null>(null);
@@ -143,6 +145,7 @@ export function CanvasStage({
   // then angle snap (direction), then grid snap (interval).
   const applySnaps = useCallback(
     (raw: Vec2): Vec2 => {
+      if (ctrlHeld) return raw; // Ctrl temporarily disables all snapping
       // vertex snap (screen-space threshold) — exact, wins over the others
       if (s.snapVertices) {
         const thr = SNAP_PX / (PX_PER_M * view.scale);
@@ -166,13 +169,13 @@ export function CanvasStage({
       if (s.gridSnap) p = snapToGrid(p, s.origin, s.snapStep);
       return p;
     },
-    [s.snapVertices, s.angleStep, s.gridSnap, s.snapStep, s.origin, s.draft, snapTargets, view.scale],
+    [s.snapVertices, s.angleStep, s.gridSnap, s.snapStep, s.origin, s.draft, snapTargets, view.scale, ctrlHeld],
   );
 
-  // Grid-snap a point only (for rectangle drag corners).
+  // Grid-snap a point only (for rectangle drag corners / object dragging).
   const gridSnap = useCallback(
-    (raw: Vec2): Vec2 => (s.gridSnap ? snapToGrid(raw, s.origin, s.snapStep) : raw),
-    [s.gridSnap, s.origin, s.snapStep],
+    (raw: Vec2): Vec2 => (s.gridSnap && !ctrlHeld ? snapToGrid(raw, s.origin, s.snapStep) : raw),
+    [s.gridSnap, s.origin, s.snapStep, ctrlHeld],
   );
 
   // ---- wheel zoom (to cursor) ----
@@ -202,8 +205,10 @@ export function CanvasStage({
     s.setView({ ...nv, x: view.x + (center.x - back.x), y: view.y + (center.y - back.y) });
   };
 
-  const panning = spaceHeld || s.tool === 'pan';
-  // The view only pans via the Pan tool or a held Space — never in Select mode.
+  // Holding Space or Shift temporarily pans the view from any tool, without
+  // placing points or moving anything.
+  const modifierPan = spaceHeld || shiftHeld;
+  const panning = modifierPan || s.tool === 'pan';
   const stageDraggable = panning;
 
   // Theme-aware canvas colors.
@@ -357,6 +362,8 @@ export function CanvasStage({
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === 'Shift' && !typing) setShiftHeld(true);
+      if (e.key === 'Control' || e.key === 'Meta') setCtrlHeld(true);
       if (e.code === 'Space' && !typing) {
         setSpaceHeld(true);
         e.preventDefault();
@@ -408,15 +415,31 @@ export function CanvasStage({
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setSpaceHeld(false);
+      if (e.key === 'Shift') setShiftHeld(false);
+      if (e.key === 'Control' || e.key === 'Meta') setCtrlHeld(false);
       if (e.key.startsWith('Arrow')) s.endNudge(); // close the coalesced undo step
+    };
+    // If focus leaves the window, drop all held modifiers so we don't get stuck.
+    const onBlur = () => {
+      setSpaceHeld(false);
+      setShiftHeld(false);
+      setCtrlHeld(false);
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
     };
   }, [s]);
+
+  // Force the canvas to repaint whenever the draft/scale overlay changes, so an
+  // aborted polygon can't leave a stale cursor/vertex circle painted.
+  useEffect(() => {
+    stageRef.current?.batchDraw();
+  }, [s.draft, s.scaleDraft]);
 
   const zoomAtCenter = (factor: number) => {
     const center = { x: size.w / 2, y: size.h / 2 };
@@ -435,7 +458,11 @@ export function CanvasStage({
     path: 'Click to add points · double-click or Enter to finish',
     area: 'Click to place the area, then edit its size on the right',
   };
-  const hint = TOOL_HINT[s.tool];
+  const polyDrawHint =
+    (s.tool === 'polygon' || s.tool === 'path') && ctrlHeld ? ' · snapping off (Ctrl)' : '';
+  const hint = modifierPan
+    ? `✋ Pan mode — release ${spaceHeld ? 'Space' : 'Shift'} to resume`
+    : TOOL_HINT[s.tool] && `${TOOL_HINT[s.tool]}${polyDrawHint}`;
 
   const cursor = panning ? 'grab' : s.tool === 'select' ? 'default' : 'crosshair';
 
@@ -482,7 +509,7 @@ export function CanvasStage({
             <PlanImageNode
               image={s.image}
               origin={s.origin}
-              draggable={s.tool === 'pan' && !spaceHeld && !s.locked}
+              draggable={s.tool === 'pan' && !modifierPan && !s.locked}
               onDragEnd={(c) => s.updateImage({ center: c })}
             />
           )}

@@ -8,7 +8,7 @@ import {
 } from '../core/geometry';
 import type { OriginFrame } from '../core/geometry';
 import type { UnitSystem } from '../core/units';
-import type { AreaObj, SceneObject, Vec2 } from '../core/types';
+import type { SceneObject, Vec2 } from '../core/types';
 
 interface Ctx {
   units: UnitSystem;
@@ -69,10 +69,13 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
   const handleR = 5 / ctx.viewScale;
 
   // Whole-object move: drag a group, bake offset into geometry on drag end.
+  // Ignore drag-end events that bubble up from child handles (resize/vertex
+  // handles) — only act when the group itself was dragged.
   const onGroupDragEnd = (
     e: Konva.KonvaEventObject<DragEvent>,
     apply: (dx: number, dy: number) => void,
   ) => {
+    if (e.target !== e.currentTarget) return;
     const g = e.target;
     const dx = g.x() / PX_PER_M;
     const dy = g.y() / PX_PER_M;
@@ -190,23 +193,48 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
     obj.shape === 'rect'
       ? `${fmtLen(obj.length, ctx.units)} × ${fmtLen(obj.wNear, ctx.units)}`
       : `L ${fmtLen(obj.length, ctx.units)} · W ${fmtLen(obj.wNear, ctx.units)}→${fmtLen(obj.wFar, ctx.units)}`;
-  // Resize a corner handle: convert the (grid-snapped) world point to the area's
-  // local frame and update the dimensions. Near corners (0,1) set wNear; far
-  // corners (2,3) set length + wFar. Rectangles keep near/far widths linked.
+  // Resize by dragging a corner. The diagonally-opposite corner stays fixed, so
+  // dragging one corner moves only that corner (no symmetric expansion). Works
+  // in the area's rotated local frame; rectangles resize as a box, fans keep
+  // their near edge fixed when a near corner is dragged and vice-versa.
   const resizeCorner = (i: number, node: Konva.Node) => {
     const world = ctx.snap({ x: node.x() / PX_PER_M, y: node.y() / PX_PER_M });
-    const local = rotate(sub(world, obj.origin), -obj.rotationDeg);
-    const half = Math.abs(local.y);
-    const patch: Partial<AreaObj> = {};
-    if (i === 0 || i === 1) {
-      patch.wNear = Math.max(0.05, 2 * half);
-      if (obj.shape === 'rect') patch.wFar = patch.wNear;
+    const u = rotate({ x: 1, y: 0 }, obj.rotationDeg); // local +x (axis) in world
+    const v = rotate({ x: 0, y: 1 }, obj.rotationDeg); // local +y (width) in world
+    const dot = (p: Vec2, w: Vec2) => p.x * w.x + p.y * w.y;
+
+    if (obj.shape === 'rect') {
+      // Box resize: the diagonally-opposite corner stays fixed.
+      const opp = areaCorners(obj)[(i + 2) % 4];
+      const uMin = Math.min(dot(opp, u), dot(world, u));
+      const uMax = Math.max(dot(opp, u), dot(world, u));
+      const vMin = Math.min(dot(opp, v), dot(world, v));
+      const vMax = Math.max(dot(opp, v), dot(world, v));
+      const vMid = (vMin + vMax) / 2;
+      const width = Math.max(0.05, vMax - vMin);
+      ctx.onUpdate(obj.id, {
+        origin: { x: uMin * u.x + vMid * v.x, y: uMin * u.y + vMid * v.y },
+        length: Math.max(0.05, uMax - uMin),
+        wNear: width,
+        wFar: width,
+      } as Partial<SceneObject>);
     } else {
-      patch.length = Math.max(0.05, local.x);
-      patch.wFar = Math.max(0.05, 2 * half);
-      if (obj.shape === 'rect') patch.wNear = patch.wFar;
+      // Fan: keep the symmetric trapezoid. Near corners set wNear; far corners
+      // set length + wFar (the opposite edge stays put).
+      const local = rotate(sub(world, obj.origin), -obj.rotationDeg);
+      const half = Math.max(0.025, Math.abs(local.y));
+      if (i === 0 || i === 1) {
+        ctx.onUpdate(obj.id, { wNear: 2 * half } as Partial<SceneObject>);
+      } else {
+        ctx.onUpdate(obj.id, {
+          length: Math.max(0.05, local.x),
+          wFar: 2 * half,
+        } as Partial<SceneObject>);
+      }
     }
-    ctx.onUpdate(obj.id, patch as Partial<SceneObject>);
+    // Glue the dragged handle to the (snapped) cursor so Konva's drag and
+    // React's re-render don't fight and leave it in a stale spot on release.
+    node.position({ x: world.x * PX_PER_M, y: world.y * PX_PER_M });
   };
 
   return (
