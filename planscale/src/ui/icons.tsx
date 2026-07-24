@@ -76,14 +76,25 @@ export const Icon = {
   ),
   undo: () => (
     <svg viewBox="0 0 20 20" {...S}>
-      <path d="M7 5L3 9l4 4" />
-      <path d="M3 9h9a4 4 0 010 8H8" />
+      <path d="M6 9H12a4.5 4.5 0 0 1 0 9H8" />
+      <path d="M9 5.5L5 9l4 3.5" />
     </svg>
   ),
   redo: () => (
     <svg viewBox="0 0 20 20" {...S}>
-      <path d="M13 5l4 4-4 4" />
-      <path d="M17 9H8a4 4 0 000 8h4" />
+      <path d="M14 9H8a4.5 4.5 0 0 0 0 9h4" />
+      <path d="M11 5.5L15 9l-4 3.5" />
+    </svg>
+  ),
+  moon: () => (
+    <svg viewBox="0 0 20 20" {...S}>
+      <path d="M16 11.5A6.5 6.5 0 0 1 8.5 4a6.5 6.5 0 1 0 7.5 7.5z" />
+    </svg>
+  ),
+  sun: () => (
+    <svg viewBox="0 0 20 20" {...S}>
+      <circle cx="10" cy="10" r="3.4" />
+      <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4" />
     </svg>
   ),
   fit: () => (

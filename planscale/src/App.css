@@ -144,8 +144,8 @@
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #fbfbfc;
-  background-image: radial-gradient(circle, #e7e9ee 1px, transparent 1px);
+  background-color: var(--canvas-bg);
+  background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px);
   background-size: 22px 22px;
   min-width: 0;
 }
@@ -171,13 +171,13 @@
   border-radius: 12px;
   padding: 28px 40px;
   text-align: center;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--panel);
 }
 .hud {
   position: absolute;
   left: 12px;
   bottom: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;

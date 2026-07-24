@@ -42,21 +42,6 @@ export function rotateAround(p: Vec2, center: Vec2, deg: number): Vec2 {
   return add(center, rotate(sub(p, center), deg));
 }
 
-// Convert a world point into the plan image's pixel coordinates (0,0 at image
-// top-left). Used by two-point scaling to measure pixel distance between clicks.
-export function worldToImagePx(
-  world: Vec2,
-  img: { center: Vec2; rotationDeg: number; mPerPx: number; natW: number; natH: number },
-): Vec2 {
-  // world -> image-local meters (undo rotation about center)
-  const local = rotate(sub(world, img.center), -img.rotationDeg);
-  // meters -> pixels, re-add the center offset (center is natW/2, natH/2 px)
-  return {
-    x: local.x / img.mPerPx + img.natW / 2,
-    y: local.y / img.mPerPx + img.natH / 2,
-  };
-}
-
 // ---- Display (origin-relative) conversion ----
 
 export interface OriginFrame {

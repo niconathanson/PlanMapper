@@ -47,6 +47,7 @@ interface HistorySnapshot {
   image: PlanImage | null;
   origin: Vec2;
   originRotationDeg: number;
+  originSet: boolean;
   objects: SceneObject[];
 }
 
@@ -56,7 +57,11 @@ interface AppState {
   image: PlanImage | null;
   origin: Vec2; // world meters that reads as (0,0)
   originRotationDeg: number;
+  originSet: boolean; // true once the user has explicitly placed the origin
   objects: SceneObject[];
+
+  // --- appearance ---
+  theme: 'dark' | 'light';
 
   // --- UI / transient state ---
   tool: ToolId;
@@ -90,6 +95,7 @@ interface AppState {
 
   setOrigin: (world: Vec2) => void;
   setOriginRotation: (deg: number) => void;
+  clearOrigin: () => void;
 
   beginScale: () => void;
   setScalePoint: (which: 'a' | 'b', world: Vec2) => void;
@@ -112,6 +118,8 @@ interface AppState {
   select: (id: string | null) => void;
   nextColor: () => string;
 
+  toggleTheme: () => void;
+
   loadProject: (data: ProjectData) => void;
   toProject: () => ProjectData;
   newProject: () => void;
@@ -121,10 +129,22 @@ interface AppState {
   redo: () => void;
 }
 
+const THEME_KEY = 'planscale.theme';
+function initialTheme(): 'dark' | 'light' {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    if (v === 'light' || v === 'dark') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'dark'; // dark by default
+}
+
 const snapshot = (s: AppState): HistorySnapshot => ({
   image: s.image,
   origin: s.origin,
   originRotationDeg: s.originRotationDeg,
+  originSet: s.originSet,
   objects: s.objects,
 });
 
@@ -149,7 +169,9 @@ export const useStore = create<AppState>((set, get) => {
     image: null,
     origin: { x: 0, y: 0 },
     originRotationDeg: 0,
+    originSet: false,
     objects: [],
+    theme: initialTheme(),
 
     tool: 'select',
     selectedId: null,
@@ -178,8 +200,15 @@ export const useStore = create<AppState>((set, get) => {
     updateImage: (patch) =>
       withHistory((s) => ({ image: s.image ? { ...s.image, ...patch } : null })),
 
-    setOrigin: (world) => withHistory(() => ({ origin: world })),
+    setOrigin: (world) => withHistory(() => ({ origin: world, originSet: true })),
     setOriginRotation: (deg) => withHistory(() => ({ originRotationDeg: deg })),
+    // Clear the origin: unlock the image and move the origin back to the image
+    // centre (or world 0,0 if no image).
+    clearOrigin: () =>
+      withHistory((s) => ({
+        origin: s.image ? { ...s.image.center } : { x: 0, y: 0 },
+        originSet: false,
+      })),
 
     beginScale: () => set({ tool: 'scale', scaleDraft: {} }),
     setScalePoint: (which, world) =>
@@ -193,10 +222,10 @@ export const useStore = create<AppState>((set, get) => {
       const curMeters = Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y);
       if (curMeters < 1e-9) return;
       const factor = knownMeters / curMeters;
-      // Rescale about point a so the plan doesn't jump under the cursor:
-      // newCenter = a + (center - a) * factor
-      const a = d.a;
-      const newCenter = add(a, scaleVec(sub(img.center, a), factor));
+      // Rescale about the ORIGIN so the origin point stays fixed on the plan:
+      // newCenter = origin + (center - origin) * factor
+      const o = s.origin;
+      const newCenter = add(o, scaleVec(sub(img.center, o), factor));
       withHistory(() => ({
         image: { ...img, mPerPx: img.mPerPx * factor, center: newCenter },
         scaleDraft: null,
@@ -268,12 +297,24 @@ export const useStore = create<AppState>((set, get) => {
       return c;
     },
 
+    toggleTheme: () =>
+      set((s) => {
+        const theme = s.theme === 'dark' ? 'light' : 'dark';
+        try {
+          localStorage.setItem(THEME_KEY, theme);
+        } catch {
+          /* ignore */
+        }
+        return { theme };
+      }),
+
     loadProject: (data) =>
       set({
         units: data.units,
         image: data.image,
         origin: data.origin,
         originRotationDeg: data.originRotationDeg ?? 0,
+        originSet: data.originSet ?? true,
         objects: data.objects,
         selectedId: null,
         tool: 'select',
@@ -291,6 +332,7 @@ export const useStore = create<AppState>((set, get) => {
         image: s.image,
         origin: s.origin,
         originRotationDeg: s.originRotationDeg,
+        originSet: s.originSet,
         objects: s.objects,
       };
     },
@@ -299,6 +341,7 @@ export const useStore = create<AppState>((set, get) => {
         image: null,
         origin: { x: 0, y: 0 },
         originRotationDeg: 0,
+        originSet: false,
         objects: [],
         selectedId: null,
         tool: 'select',

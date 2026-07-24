@@ -1,4 +1,21 @@
-:root {
+/* Dark is the default theme (applied even before JS sets data-theme). */
+:root,
+:root[data-theme='dark'] {
+  --bg: #14161b;
+  --panel: #1e2128;
+  --panel-2: #272b34;
+  --border: #363b45;
+  --text: #e7e9ee;
+  --muted: #98a0ac;
+  --accent: #3b82f6;
+  --accent-soft: #1d2b45;
+  --danger: #f87171;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --canvas-bg: #14161b;
+  --canvas-dot: #23262e;
+}
+
+:root[data-theme='light'] {
   --bg: #f4f5f7;
   --panel: #ffffff;
   --panel-2: #f0f2f5;
@@ -9,9 +26,15 @@
   --accent-soft: #e6efff;
   --danger: #dc2626;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --canvas-bg: #fbfbfc;
+  --canvas-dot: #e7e9ee;
+}
+
+:root {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   font-size: 14px;
+  color-scheme: dark light;
 }
 
 * {

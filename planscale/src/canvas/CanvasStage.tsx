@@ -176,7 +176,17 @@ export function CanvasStage({
   };
 
   const panning = spaceHeld || s.tool === 'pan';
-  const stageDraggable = panning || s.tool === 'select';
+  // The view only pans via the Pan tool or a held Space — never in Select mode.
+  const stageDraggable = panning;
+
+  // Theme-aware canvas colors.
+  const dark = s.theme === 'dark';
+  const cc = {
+    grid: dark ? '#2f333c' : '#dfe3ea',
+    originDot: dark ? '#e6e8ec' : '#111111',
+    labelBg: dark ? 'rgba(28,31,38,0.92)' : 'rgba(255,255,255,0.85)',
+    labelStroke: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.09)',
+  };
 
   // ---- click: tool-dependent placement ----
   const onStageClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -280,6 +290,14 @@ export function CanvasStage({
       s.addObject(makeArea('rect', start, color, defaultAreaBase()));
     }
     s.setTool('select');
+  };
+
+  // Right-click finishes the current line/polygon (and suppresses the browser menu).
+  const onContextMenu = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    e.evt.preventDefault();
+    if (s.draft && (s.draft.tool === 'polygon' || s.draft.tool === 'path')) {
+      s.commitDraft();
+    }
   };
 
   const onMouseMove = () => {
@@ -398,6 +416,7 @@ export function CanvasStage({
         setDragOver(false);
         if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
       }}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <Stage
         ref={stageRef}
@@ -416,16 +435,18 @@ export function CanvasStage({
         onMouseDown={onMouseDown}
         onMouseUp={onMouseUp}
         onMouseMove={onMouseMove}
+        onContextMenu={onContextMenu}
         onDragEnd={onStageDragEnd}
       >
         <Layer listening={false}>
-          {s.gridVisible && <Grid view={view} width={size.w} height={size.h} />}
+          {s.gridVisible && <Grid view={view} width={size.w} height={size.h} stroke={cc.grid} />}
         </Layer>
         <Layer>
           {s.image && (
             <PlanImageNode
               image={s.image}
-              draggable={s.tool === 'select' && !panning}
+              origin={s.origin}
+              draggable={s.tool === 'select' && !panning && !s.originSet}
               onDragEnd={(c) => s.updateImage({ center: c })}
             />
           )}
@@ -437,6 +458,7 @@ export function CanvasStage({
             view={view}
             width={size.w}
             height={size.h}
+            dotColor={cc.originDot}
           />
         </Layer>
         <Layer>
@@ -448,6 +470,8 @@ export function CanvasStage({
               viewScale: view.scale,
               selectedId: s.selectedId,
               editable: s.tool === 'select' && !panning,
+              labelBg: cc.labelBg,
+              labelStroke: cc.labelStroke,
               onSelect: (id: string) => s.select(id),
               onUpdate: (id: string, patch: Partial<SceneObject>) => s.updateObject(id, patch),
             }}

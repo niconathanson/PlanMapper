@@ -16,6 +16,8 @@ interface Ctx {
   viewScale: number;
   selectedId: string | null;
   editable: boolean; // tool === 'select'
+  labelBg: string;
+  labelStroke: string;
   onSelect: (id: string) => void;
   onUpdate: (id: string, patch: Partial<SceneObject>) => void;
 }
@@ -30,17 +32,21 @@ function ScreenLabel({
   text,
   viewScale,
   color = '#111',
+  bg = 'rgba(255,255,255,0.85)',
+  stroke = 'rgba(0,0,0,0.09)',
 }: {
   x: number;
   y: number;
   text: string;
   viewScale: number;
   color?: string;
+  bg?: string;
+  stroke?: string;
 }) {
   const s = 1 / viewScale;
   return (
     <Label x={x} y={y} scaleX={s} scaleY={s} listening={false} offsetY={-8}>
-      <Tag fill="rgba(255,255,255,0.85)" cornerRadius={3} stroke="#00000018" />
+      <Tag fill={bg} cornerRadius={3} stroke={stroke} />
       <Text text={text} fontSize={12} padding={4} fill={color} fontFamily="system-ui, sans-serif" />
     </Label>
   );
@@ -93,6 +99,8 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
           y={sy}
           viewScale={ctx.viewScale}
           color={obj.color}
+          bg={ctx.labelBg}
+          stroke={ctx.labelStroke}
           text={`${obj.label ? obj.label + '  ' : ''}${fmtCoord(obj.p, ctx.frame, ctx.units)}`}
         />
       </Group>
@@ -157,6 +165,8 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
           y={cy * PX_PER_M}
           viewScale={ctx.viewScale}
           color={obj.color}
+          bg={ctx.labelBg}
+          stroke={ctx.labelStroke}
           text={`${obj.label ? obj.label + '  ·  ' : ''}${metric}`}
         />
       </Group>

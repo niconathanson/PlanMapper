@@ -81,6 +81,13 @@ export function TopBar({ onImport }: { onImport: () => void }) {
       <button className="tbtn" onClick={s.requestFit} title="Fit to view">
         {Icon.fit()}
       </button>
+      <button
+        className="tbtn"
+        onClick={s.toggleTheme}
+        title={s.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {s.theme === 'dark' ? Icon.sun() : Icon.moon()}
+      </button>
     </div>
   );
 }

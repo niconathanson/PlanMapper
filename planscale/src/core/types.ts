@@ -80,5 +80,6 @@ export interface ProjectData {
   image: PlanImage | null;
   origin: Vec2;
   originRotationDeg: number;
+  originSet?: boolean;
   objects: SceneObject[];
 }

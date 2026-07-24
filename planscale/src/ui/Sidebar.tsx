@@ -84,7 +84,9 @@ function ImagePanel() {
         </button>
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
-        Drag the plan to move it (Select tool). Use “Scale by 2 points” to set real-world size.
+        {s.originSet
+          ? 'Plan is locked to the origin. Rotation and scale pivot on it. Unlock it under Origin to reposition.'
+          : 'Drag the plan to position it (Select tool). Set the origin on a known point, then scale — both lock and pivot there.'}
       </p>
     </div>
   );
@@ -135,17 +137,23 @@ function OriginPanel() {
   const active = s.tool === 'origin';
   return (
     <div className="section">
-      <h3>Origin (0,0)</h3>
+      <h3>
+        Origin (0,0)
+        {s.originSet && <span className="pill">plan locked</span>}
+      </h3>
       <div className="btn-row" style={{ marginBottom: 8 }}>
         <button className={`tbtn ${active ? 'primary' : ''}`} onClick={() => s.setTool('origin')}>
-          Set origin (click plan)
+          {s.originSet ? 'Move origin' : 'Set origin (click plan)'}
         </button>
-        <button className="tbtn" onClick={() => s.setOrigin({ x: 0, y: 0 })} title="Reset origin">
-          Reset
-        </button>
+        {s.originSet && (
+          <button className="tbtn" onClick={() => s.clearOrigin()} title="Clear origin and unlock the plan image">
+            Unlock
+          </button>
+        )}
       </div>
       <p className="hint">
-        All coordinates are measured from this point (positive Y is up).
+        All coordinates are measured from this point (positive Y is up). Scaling and
+        rotation pivot on it, and the plan image locks to it once set.
         {active ? ' Click the plan to place it, then nudge with the arrow keys.' : ''}
       </p>
     </div>

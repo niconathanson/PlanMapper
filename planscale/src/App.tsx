@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import './App.css';
 import type * as pdfjs from 'pdfjs-dist';
 import { useStore } from './core/store';
@@ -13,6 +13,12 @@ import type { PlanImage } from './core/types';
 export default function App() {
   const setImage = useStore((s) => s.setImage);
   const requestFit = useStore((s) => s.requestFit);
+  const theme = useStore((s) => s.theme);
+
+  // Reflect the theme onto the document root so CSS variables switch.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pdfPick, setPdfPick] = useState<{ pdf: pdfjs.PDFDocumentProxy; name: string } | null>(null);
   const [loadingMsg, setLoadingMsg] = useState<string | null>(null);

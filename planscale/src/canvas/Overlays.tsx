@@ -33,15 +33,16 @@ export function Grid({
   view,
   width,
   height,
+  stroke = '#dfe3ea',
 }: {
   view: ViewState;
   width: number;
   height: number;
+  stroke?: string;
 }) {
   const spacing = niceSpacingMeters(view);
   const b = visibleStageBounds(view, width, height);
   const stagePerM = PX_PER_M;
-  const stroke = '#dfe3ea';
   const sw = 1 / view.scale;
   const lines: React.ReactNode[] = [];
 
@@ -73,12 +74,14 @@ export function OriginAxes({
   view,
   width,
   height,
+  dotColor = '#111',
 }: {
   origin: Vec2;
   rotationDeg: number;
   view: ViewState;
   width: number;
   height: number;
+  dotColor?: string;
 }) {
   const o = { x: origin.x * PX_PER_M, y: origin.y * PX_PER_M };
   const b = visibleStageBounds(view, width, height);
@@ -109,7 +112,7 @@ export function OriginAxes({
     <Group listening={false}>
       {axis(xdir, '#d64545', 'x')}
       {axis(ydir, '#3a6ea5', 'y')}
-      <Circle x={o.x} y={o.y} radius={5 / view.scale} fill="#111" />
+      <Circle x={o.x} y={o.y} radius={5 / view.scale} fill={dotColor} />
     </Group>
   );
 }
