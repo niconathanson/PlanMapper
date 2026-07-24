@@ -32,6 +32,29 @@ non-technical re: tooling — deliverables should stay double-click runnable.
   errors + "Failed to reload"). Fix: `preview_stop` + `preview_start` (clean restart),
   then hard-reload the tab.
 
+## Packaging (Tauri desktop app)
+
+`src-tauri/` wraps the built web app in a native WebView2 window (Tauri v2). No app
+code is Tauri-specific — the frontend is the same web app (file I/O uses the browser
+File System Access API with download/`<input>` fallbacks, which work in the webview).
+
+- **Build:** `npm run app:build` (= `tauri build`; runs `npm run build` first via
+  `beforeBuildCommand`). Output: `src-tauri/target/release/planscale.exe` (~8.7 MB,
+  **portable single exe**, needs the WebView2 runtime that ships with Win10/11) and an
+  NSIS installer at `.../release/bundle/nsis/PlanScale_0.1.0_x64-setup.exe`.
+- **Requires Rust ≥ 1.85** (a transitive dep needs edition 2024). Plus MSVC C++ build
+  tools (VS2022) — both already on the dev machine.
+- Key config in `src-tauri/tauri.conf.json`: `dragDropEnabled: false` (so the webview's
+  native HTML drag-drop plan import still fires instead of Tauri's OS file-drop),
+  `csp: null` (permissive — needed for data-URL images + the pdf.js worker), identifier
+  `com.planscale.desktop`. Cargo package is named `planscale` so the exe is
+  `planscale.exe`. `vite.config.ts` uses relative `base: './'` for `build` only.
+- Icons in `src-tauri/icons/` are the default Tauri logos — rebrand later with
+  `npx tauri icon <png>`. Unsigned → Windows SmartScreen "More info → Run anyway".
+- **macOS:** same code; must build **on a Mac** (Rust + Xcode CLT), `tauri build` →
+  `.app`/`.dmg`. M-series build is arm64-only; use `--target universal-apple-darwin`
+  for Intel-Mac colleagues. Unsigned → Gatekeeper right-click-Open.
+
 ## Architecture
 
 Vite + React 19 + TypeScript + Konva/react-konva (canvas) + pdf.js (PDF render) +
