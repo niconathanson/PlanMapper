@@ -27,3 +27,12 @@ Thumbs.db
 
 # stray debug screenshots dropped in the project root
 /*.png
+
+# Packaged builds staged for handing out (exe / installer / dmg)
+/releases/
+
+# Cross-machine handoff folders (build outputs + patches, merged by hand)
+/PlanMapper-mac-handoff/
+
+# macOS AppleDouble sidecars, created when a Mac writes to a FAT/exFAT volume
+._*

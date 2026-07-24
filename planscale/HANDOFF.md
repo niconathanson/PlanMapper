@@ -57,16 +57,50 @@ File System Access API with download/`<input>` fallbacks, which work in the webv
   `planmapper.exe`. `vite.config.ts` uses relative `base: './'` for `build` only.
 - Icons in `src-tauri/icons/` are the default Tauri logos — rebrand later with
   `npx tauri icon <png>`. Unsigned → Windows SmartScreen "More info → Run anyway".
-- **macOS:** same code; must build **on a Mac** (Rust + Xcode CLT), `npm run app:build`
-  → `.app`/`.dmg` in `src-tauri/target/release/bundle/`. The base config's
-  `bundle.targets` is `["nsis"]` (Windows), so `src-tauri/tauri.macos.conf.json`
-  overrides it to `["app","dmg"]` — Tauri auto-merges `tauri.<platform>.conf.json`
-  (RFC 7396 merge patch), no flag needed. M-series builds arm64-only; add
-  `-- --target universal-apple-darwin` (after `rustup target add x86_64-apple-darwin
-  aarch64-apple-darwin`) for Intel-Mac colleagues. Unsigned → Gatekeeper right-click-Open.
-  **When moving the repo to a Mac:** build on the internal drive, not a FAT/exFAT
-  stick, and delete the Windows-built `node_modules/` and `src-tauri/target/` first
-  (`npm install` re-fetches the native binaries for macOS).
+### macOS builds (done & verified 2026-07-24 on an Apple Silicon Mac)
+
+Same code, no source changes — must be built **on a Mac** (Rust + Xcode Command Line
+Tools; no full Xcode needed). Verified working: the packaged app launches and the UI
+renders correctly from the universal binary.
+
+- **Build (universal — this is the one to ship):**
+  `npm run tauri build -- --target universal-apple-darwin`
+  Output `src-tauri/target/universal-apple-darwin/release/bundle/`:
+  `macos/PlanMapper.app` (~20 MB) and `dmg/PlanMapper_<version>_universal.dmg` (~6.8 MB).
+  One download that runs natively on both Apple Silicon and Intel — macOS loads only
+  the matching slice, so there is **no runtime performance cost**, just ~2× size and
+  ~2× build time. Confirm both slices with
+  `lipo -info PlanMapper.app/Contents/MacOS/planmapper` → `x86_64 arm64`.
+- **Prereq:** `rustup target add x86_64-apple-darwin aarch64-apple-darwin`. Plain
+  `npm run app:build` (no `--target`) produces an **arm64-only** app that Intel Macs
+  cannot run — prefer the universal target for anything handed to other people.
+- **Targets config:** `src-tauri/tauri.macos.conf.json` sets `targets: ["app","dmg"]`
+  and `minimumSystemVersion: 10.15`. Tauri v2 auto-merges `tauri.<platform>.conf.json`
+  on top of `tauri.conf.json`, so this only applies on macOS — the base config keeps
+  `targets: ["nsis"]` and the **Windows build is unaffected**.
+- **`bundle_dmg.sh` is flaky — re-run it.** The DMG step shells out to `osascript` to
+  make Finder arrange the disk-image window. That AppleScript can fail (first-run
+  Automation permission prompt, or Finder not responding), aborting the build *after*
+  the `.app` is already built. Its fingerprint is an orphaned `rw.<pid>.*.dmg` temp
+  image left in `bundle/macos/` — safe to delete. **Fix: just run the build again**,
+  no config change needed. It needs a logged-in GUI session (won't work over plain
+  SSH); `bundle_dmg.sh --skip-jenkins` skips the cosmetic step if it ever gets stuck.
+- **Unsigned** — ad-hoc/linker-signed only, no Apple Developer ID, so `spctl` rejects
+  it and Gatekeeper blocks a normal double-click. **First launch: right-click the app
+  → Open → Open.** Only needed once per machine. Proper signing/notarization would
+  need a paid Apple Developer account.
+- **Moving the repo between machines:** build on the internal drive, not a FAT/exFAT
+  stick (no POSIX permissions, and `target/` is multi-GB), and delete the other
+  platform's `node_modules/` and `src-tauri/target/` first — `npm install` re-fetches
+  the native binaries for the new OS.
+- **Resetting the first-run guide** (for demos/screenshots): the only local state is
+  `planmapper.guideSeen` in WebKit localStorage at
+  `~/Library/WebKit/com.planmapper.desktop/WebsiteData/Default/*/*/LocalStorage/localstorage.sqlite3`.
+  Quit the app first, then
+  `sqlite3 <that file> "delete from ItemTable where key='planmapper.guideSeen';"`.
+  Plans/projects are file-based, so nothing user-created lives there.
+  (On Windows the equivalent is the WebView2 profile beside `planmapper.exe`; in the
+  browser it's just `localStorage.removeItem('planmapper.guideSeen')` in the console.)
 
 ## Architecture
 
