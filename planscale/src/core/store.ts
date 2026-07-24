@@ -69,6 +69,7 @@ interface AppState {
   draft: DrawDraft | null;
   colorCursor: number;
   dirty: boolean; // unsaved changes
+  nudging: boolean; // true while a run of arrow-key nudges is coalescing
   fitVersion: number; // bump to request the canvas re-fit the view
 
   // --- history ---
@@ -105,6 +106,9 @@ interface AppState {
   addObject: (obj: SceneObject) => void;
   updateObject: (id: string, patch: Partial<SceneObject>) => void;
   deleteObject: (id: string) => void;
+  nudgeSelected: (dx: number, dy: number) => void; // arrow-key move (world meters)
+  nudgeOrigin: (dx: number, dy: number) => void;
+  endNudge: () => void;
   select: (id: string | null) => void;
   nextColor: () => string;
 
@@ -129,7 +133,15 @@ export const useStore = create<AppState>((set, get) => {
   const withHistory = (mutate: (s: AppState) => Partial<AppState>) => {
     const s = get();
     const snap = snapshot(s);
-    set({ ...mutate(s), past: [...s.past, snap], future: [], dirty: true });
+    set({ ...mutate(s), past: [...s.past, snap], future: [], dirty: true, nudging: false });
+  };
+
+  // Coalesce a burst of arrow-key nudges into a single undo step: only the first
+  // nudge of a run pushes a history snapshot.
+  const withNudge = (mutate: (s: AppState) => Partial<AppState>) => {
+    const s = get();
+    const base = s.nudging ? {} : { past: [...s.past, snapshot(s)], future: [] };
+    set({ ...mutate(s), ...base, nudging: true, dirty: true });
   };
 
   return {
@@ -149,6 +161,7 @@ export const useStore = create<AppState>((set, get) => {
     draft: null,
     colorCursor: 0,
     dirty: false,
+    nudging: false,
     fitVersion: 0,
     past: [],
     future: [],
@@ -232,6 +245,22 @@ export const useStore = create<AppState>((set, get) => {
         objects: s.objects.filter((o) => o.id !== id),
         selectedId: s.selectedId === id ? null : s.selectedId,
       })),
+    nudgeSelected: (dx, dy) => {
+      const id = get().selectedId;
+      if (!id) return;
+      withNudge((s) => ({
+        objects: s.objects.map((o) => {
+          if (o.id !== id) return o;
+          if (o.type === 'probe') return { ...o, p: { x: o.p.x + dx, y: o.p.y + dy } };
+          if (o.type === 'polygon' || o.type === 'path')
+            return { ...o, pts: o.pts.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
+          return { ...o, origin: { x: o.origin.x + dx, y: o.origin.y + dy } };
+        }),
+      }));
+    },
+    nudgeOrigin: (dx, dy) =>
+      withNudge((s) => ({ origin: { x: s.origin.x + dx, y: s.origin.y + dy } })),
+    endNudge: () => set({ nudging: false }),
     select: (id) => set({ selectedId: id }),
     nextColor: () => {
       const c = PALETTE[get().colorCursor % PALETTE.length];
@@ -313,10 +342,13 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
   (window as unknown as { __store: typeof useStore }).__store = useStore;
 }
 
+// Build an area with sensible default dimensions derived from `base` (meters):
+// a rectangle is base × base; a fan is a tidy trapezoid scaled from base.
 export function makeArea(
   shape: 'rect' | 'fan',
   origin: Vec2,
   color: string,
+  base: number,
 ): AreaObj {
   return {
     id: crypto.randomUUID(),
@@ -324,9 +356,32 @@ export function makeArea(
     shape,
     origin,
     rotationDeg: 0,
-    length: shape === 'rect' ? 6 : 8,
-    wNear: shape === 'rect' ? 6 : 4,
-    wFar: shape === 'rect' ? 6 : 10,
+    length: shape === 'rect' ? base : base * 1.4,
+    wNear: shape === 'rect' ? base : base * 0.5,
+    wFar: shape === 'rect' ? base : base * 1.4,
+    label: '',
+    color,
+  };
+}
+
+// A fully-specified rectangle area covering an axis-aligned world bounds box
+// (used by drag-to-size). Origin sits at the middle of the near (min-x) edge.
+export function makeRectFromBounds(
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+  color: string,
+): AreaObj {
+  return {
+    id: crypto.randomUUID(),
+    type: 'area',
+    shape: 'rect',
+    origin: { x: minX, y: (minY + maxY) / 2 },
+    rotationDeg: 0,
+    length: maxX - minX,
+    wNear: maxY - minY,
+    wFar: maxY - minY,
     label: '',
     color,
   };

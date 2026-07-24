@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Stage, Layer } from 'react-konva';
+import { Stage, Layer, Rect } from 'react-konva';
 import type Konva from 'konva';
-import { useStore, makeArea } from '../core/store';
+import { useStore, makeArea, makeRectFromBounds } from '../core/store';
 import { PX_PER_M, snapAngle, dist } from '../core/geometry';
+import { M_PER_FT } from '../core/units';
 import type { Vec2, SceneObject } from '../core/types';
 import { PlanImageNode } from './PlanImageNode';
 import { Grid, OriginAxes } from './Overlays';
@@ -29,6 +30,10 @@ export function CanvasStage({
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // Drag-to-size state for the rectangle area tool (world meters).
+  const [areaDrag, setAreaDrag] = useState<{ start: Vec2; cur: Vec2 } | null>(null);
+
+  const defaultAreaBase = () => (s.units === 'm' ? 3 : 10 * M_PER_FT); // 3 m or 10 ft
 
   // Fit the stage to its container. We combine a ResizeObserver with window
   // resize + a few timed re-measures, because RO delivery is tied to paint and
@@ -185,8 +190,8 @@ export function CanvasStage({
         if (clickedEmpty) s.select(null);
         break;
       case 'origin':
+        // Stay in the origin tool so it can be fine-tuned with the arrow keys.
         s.setOrigin(raw);
-        s.setTool('select');
         break;
       case 'probe': {
         const color = s.nextColor();
@@ -199,11 +204,13 @@ export function CanvasStage({
         break;
       }
       case 'area': {
-        const shape = s.draft?.shape ?? 'rect';
-        const color = s.nextColor();
-        const area = makeArea(shape, raw, color);
-        s.addObject(area);
-        s.setTool('select');
+        // Fan areas are click-to-place with a default size. Rectangles are
+        // handled by mousedown/up (drag-to-size, or click for a default).
+        if ((s.draft?.shape ?? 'rect') === 'fan') {
+          const area = makeArea('fan', raw, s.nextColor(), defaultAreaBase());
+          s.addObject(area);
+          s.setTool('select');
+        }
         break;
       }
       case 'polygon':
@@ -242,6 +249,39 @@ export function CanvasStage({
     }
   };
 
+  // Rectangle drag-to-size: press starts a drag box, release finalizes it.
+  const isRectTool = s.tool === 'area' && (s.draft?.shape ?? 'rect') === 'rect';
+
+  const onMouseDown = () => {
+    if (panning || !isRectTool) return;
+    const raw = pointerWorld();
+    if (!raw) return;
+    setAreaDrag({ start: raw, cur: raw });
+  };
+
+  const onMouseUp = () => {
+    if (!areaDrag) return;
+    const { start, cur } = areaDrag;
+    setAreaDrag(null);
+    const color = s.nextColor();
+    const draggedPx = Math.hypot(cur.x - start.x, cur.y - start.y) * PX_PER_M * view.scale;
+    if (draggedPx > 6) {
+      // real drag → rectangle covering the box
+      const area = makeRectFromBounds(
+        Math.min(start.x, cur.x),
+        Math.min(start.y, cur.y),
+        Math.max(start.x, cur.x),
+        Math.max(start.y, cur.y),
+        color,
+      );
+      s.addObject(area);
+    } else {
+      // just a click → default-sized rectangle at the point
+      s.addObject(makeArea('rect', start, color, defaultAreaBase()));
+    }
+    s.setTool('select');
+  };
+
   const onMouseMove = () => {
     const raw = pointerWorld();
     if (!raw) return;
@@ -253,6 +293,7 @@ export function CanvasStage({
         s.units,
       );
     }
+    if (areaDrag) setAreaDrag((d) => (d ? { start: d.start, cur: raw } : d));
     if (s.draft) s.setDraftCursor(applySnaps(raw));
   };
 
@@ -273,11 +314,28 @@ export function CanvasStage({
         return;
       }
       if (typing) return;
+      // Arrow keys: nudge the selected object, or the origin while placing it.
+      const ARROWS: Record<string, [number, number]> = {
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+      };
+      if (ARROWS[e.key] && (s.selectedId || s.tool === 'origin')) {
+        e.preventDefault();
+        const [ux, uy] = ARROWS[e.key];
+        // fine step = 1 in (or 1 cm); coarse (Shift) = 1 ft (or 0.1 m)
+        const step = s.units === 'm' ? (e.shiftKey ? 0.1 : 0.01) : e.shiftKey ? M_PER_FT : M_PER_FT / 12;
+        if (s.selectedId) s.nudgeSelected(ux * step, uy * step);
+        else s.nudgeOrigin(ux * step, uy * step);
+        return;
+      }
       if (e.key === 'Enter' && s.draft) {
         s.commitDraft();
       } else if (e.key === 'Escape') {
         if (s.draft) s.cancelDraft();
         else if (s.scaleDraft) s.cancelScale();
+        else if (s.tool === 'origin') s.setTool('select');
         else s.select(null);
       } else if ((e.key === 'Backspace' || e.key === 'Delete') && s.draft) {
         e.preventDefault();
@@ -294,6 +352,7 @@ export function CanvasStage({
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setSpaceHeld(false);
+      if (e.key.startsWith('Arrow')) s.endNudge(); // close the coalesced undo step
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -354,6 +413,8 @@ export function CanvasStage({
         onTap={onStageClick}
         onDblClick={onDblClick}
         onDblTap={onDblClick}
+        onMouseDown={onMouseDown}
+        onMouseUp={onMouseUp}
         onMouseMove={onMouseMove}
         onDragEnd={onStageDragEnd}
       >
@@ -395,6 +456,18 @@ export function CanvasStage({
         <Layer listening={false}>
           {s.draft && <DraftOverlay draft={s.draft} units={s.units} viewScale={view.scale} />}
           {s.scaleDraft && <ScaleOverlay scaleDraft={s.scaleDraft} units={s.units} viewScale={view.scale} />}
+          {areaDrag && (
+            <Rect
+              x={Math.min(areaDrag.start.x, areaDrag.cur.x) * PX_PER_M}
+              y={Math.min(areaDrag.start.y, areaDrag.cur.y) * PX_PER_M}
+              width={Math.abs(areaDrag.cur.x - areaDrag.start.x) * PX_PER_M}
+              height={Math.abs(areaDrag.cur.y - areaDrag.start.y) * PX_PER_M}
+              stroke="#2563eb"
+              strokeWidth={1.5 / view.scale}
+              dash={[6 / view.scale, 4 / view.scale]}
+              fill="#2563eb22"
+            />
+          )}
         </Layer>
       </Stage>
 

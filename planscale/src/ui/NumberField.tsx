@@ -51,7 +51,9 @@ export function LengthField({
   );
 }
 
-// A plain numeric input (for angles, opacity, etc.) with commit-on-blur.
+// A plain numeric input (for angles, opacity, etc.).
+// With `live`, every valid keystroke / spinner step / arrow-key press commits
+// immediately so the canvas updates in real time; otherwise commits on blur.
 export function NumField({
   value,
   onCommit,
@@ -59,6 +61,7 @@ export function NumField({
   min,
   max,
   suffix,
+  live,
 }: {
   value: number;
   onCommit: (v: number) => void;
@@ -66,21 +69,24 @@ export function NumField({
   min?: number;
   max?: number;
   suffix?: string;
+  live?: boolean;
 }) {
   const [text, setText] = useState(String(value));
   const [editing, setEditing] = useState(false);
   useEffect(() => {
     if (!editing) setText(String(Math.round(value * 100) / 100));
   }, [value, editing]);
+  const clamp = (v: number) => {
+    let c = v;
+    if (min !== undefined) c = Math.max(min, c);
+    if (max !== undefined) c = Math.min(max, c);
+    return c;
+  };
   const commit = () => {
     setEditing(false);
     const v = parseFloat(text);
-    if (!isNaN(v)) {
-      let clamped = v;
-      if (min !== undefined) clamped = Math.max(min, clamped);
-      if (max !== undefined) clamped = Math.min(max, clamped);
-      onCommit(clamped);
-    } else setText(String(value));
+    if (!isNaN(v)) onCommit(clamp(v));
+    else setText(String(value));
   };
   return (
     <>
@@ -92,7 +98,13 @@ export function NumField({
           setEditing(true);
           e.target.select();
         }}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          if (live) {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v)) onCommit(clamp(v));
+          }
+        }}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();

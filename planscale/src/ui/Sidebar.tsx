@@ -15,7 +15,7 @@ export function Sidebar({ onImport }: { onImport: () => void }) {
     <div className="sidebar">
       {s.scaleDraft ? <ScalePanel /> : null}
       {s.image ? <ImagePanel /> : <NoImagePanel onImport={onImport} />}
-      <OriginPanel frame={frame} />
+      <OriginPanel />
       {selected ? <SelectionPanel obj={selected} frame={frame} /> : null}
       <ObjectListPanel frame={frame} />
       {s.objects.length > 0 && <ExportPanel frame={frame} />}
@@ -66,7 +66,7 @@ function ImagePanel() {
       </div>
       <div className="field">
         <label>Rotation</label>
-        <NumField value={img.rotationDeg} step={0.5} onCommit={(v) => s.updateImage({ rotationDeg: v })} suffix="°" />
+        <NumField value={img.rotationDeg} step={0.5} live onCommit={(v) => s.updateImage({ rotationDeg: v })} suffix="°" />
       </div>
       <div className="field">
         <label>Plan width</label>
@@ -130,25 +130,24 @@ function ScalePanel() {
   );
 }
 
-function OriginPanel({ frame }: { frame: OriginFrame }) {
+function OriginPanel() {
   const s = useStore();
+  const active = s.tool === 'origin';
   return (
     <div className="section">
       <h3>Origin (0,0)</h3>
       <div className="btn-row" style={{ marginBottom: 8 }}>
-        <button className={`tbtn ${s.tool === 'origin' ? 'primary' : ''}`} onClick={() => s.setTool('origin')}>
+        <button className={`tbtn ${active ? 'primary' : ''}`} onClick={() => s.setTool('origin')}>
           Set origin (click plan)
         </button>
         <button className="tbtn" onClick={() => s.setOrigin({ x: 0, y: 0 })} title="Reset origin">
           Reset
         </button>
       </div>
-      <div className="field">
-        <label>Axis rot.</label>
-        <NumField value={s.originRotationDeg} step={0.5} onCommit={(v) => s.setOriginRotation(v)} suffix="°" />
-      </div>
-      <p className="hint">All coordinates below are measured from this point. Positive Y is up.</p>
-      <span style={{ display: 'none' }}>{frame.rotationDeg}</span>
+      <p className="hint">
+        All coordinates are measured from this point (positive Y is up).
+        {active ? ' Click the plan to place it, then nudge with the arrow keys.' : ''}
+      </p>
     </div>
   );
 }
@@ -267,7 +266,7 @@ function AreaEditor({ obj, frame }: { obj: AreaObj; frame: OriginFrame }) {
       {coordFields(obj.origin, frame, s.units, (w) => patch({ origin: w }))}
       <div className="field">
         <label>Rotation</label>
-        <NumField value={obj.rotationDeg} step={0.5} onCommit={(v) => patch({ rotationDeg: v })} suffix="°" />
+        <NumField value={obj.rotationDeg} step={0.5} live onCommit={(v) => patch({ rotationDeg: v })} suffix="°" />
       </div>
       <div className="field">
         <label>Length</label>
