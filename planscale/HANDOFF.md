@@ -158,6 +158,20 @@ from `areaOutline` in `geometry.ts`, while handles stay on the 4 trapezoid
 `ft-in` ("ft & in", 33' 6"), `ft.in` (Soundvision, 11.06 = 11'6", rounds to whole
 inch), `ft-dec` (33.500 ft), `m`. Format + parse per system.
 
+### First-run guide (`src/ui/Guide.tsx`)
+
+An 8-step modal walkthrough (welcome → import → origin → scale → navigation → draw →
+precision → save/export). Each step is a title + an inline SVG illustration + copy.
+All art is drawn on a shared 320×180 stage with a `Frame` helper (rail/canvas/sidebar
+chrome, one region highlighted per step) and coloured off the CSS variables, so it
+tracks light/dark. Opens automatically when `localStorage['planmapper.guideSeen']` is
+unset, and any time from the **?/Guide** button pinned to the bottom of the tool rail
+(`.toolbtn.help` uses `margin-top:auto`). Keys: ←/→/Enter page, Esc closes; the
+backdrop click closes too. Because it's a `.modal-back`, **`CanvasStage`'s window
+keydown handler early-returns whenever any `.modal-back` is mounted** — that guard is
+what stops the bare-letter tool hotkeys firing behind the guide (and the PagePicker).
+Keep the step copy in sync with `TOOL_KEYS`/the keycard when hotkeys change.
+
 ### Other
 
 `src/core/loadFile.ts` (image + pdf.js page render/thumbs), `src/core/project.ts`

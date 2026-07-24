@@ -25,7 +25,7 @@ const TOOLS: (ToolDef | 'sep')[] = [
   { id: 'area', shape: 'fan', icon: 'fan', label: 'Fan', title: 'Fan / revolution area (F)' },
 ];
 
-export function Toolbar() {
+export function Toolbar({ onHelp }: { onHelp: () => void }) {
   const tool = useStore((s) => s.tool);
   const draftShape = useStore((s) => s.draft?.shape);
   const setTool = useStore((s) => s.setTool);
@@ -59,6 +59,11 @@ export function Toolbar() {
           </button>
         ),
       )}
+      {/* Pinned to the bottom of the rail — reopens the first-run walkthrough. */}
+      <button className="toolbtn help" title="Guide / walkthrough" onClick={onHelp}>
+        {Icon.help()}
+        <span>Guide</span>
+      </button>
     </div>
   );
 }

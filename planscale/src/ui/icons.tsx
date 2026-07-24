@@ -100,6 +100,13 @@ export const Icon = {
       <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4" />
     </svg>
   ),
+  help: () => (
+    <svg viewBox="0 0 20 20" {...S}>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M7.9 7.8a2.1 2.1 0 114 .9c-.5.8-1.9 1.1-1.9 2.4" />
+      <circle cx="10" cy="14.4" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  ),
   fit: () => (
     <svg viewBox="0 0 20 20" {...S}>
       <path d="M3 7V4h3M17 7V4h-3M3 13v3h3M17 13v3h-3" />

@@ -391,6 +391,8 @@ export function CanvasStage({
   // ---- keyboard ----
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // A modal (guide, page picker…) owns the keyboard while it's up.
+      if (document.querySelector('.modal-back')) return;
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       if (e.key === 'Shift' && !typing) setShiftHeld(true);

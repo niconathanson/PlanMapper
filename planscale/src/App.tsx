@@ -7,6 +7,7 @@ import { TopBar } from './ui/TopBar';
 import { Toolbar } from './ui/Toolbar';
 import { Sidebar } from './ui/Sidebar';
 import { PagePicker } from './ui/PagePicker';
+import { Guide, guideWasSeen } from './ui/Guide';
 import { CanvasStage } from './canvas/CanvasStage';
 import type { PlanImage } from './core/types';
 
@@ -23,6 +24,8 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pdfPick, setPdfPick] = useState<{ pdf: pdfjs.PDFDocumentProxy; name: string } | null>(null);
   const [loadingMsg, setLoadingMsg] = useState<string | null>(null);
+  // First run on this machine → open the walkthrough automatically.
+  const [guideOpen, setGuideOpen] = useState(() => !guideWasSeen());
 
   const placeRaster = (r: LoadedRaster) => {
     // Default placement: image centered on the origin, sized so it's ~20 m wide
@@ -77,7 +80,7 @@ export default function App() {
     <div className="app">
       <TopBar onImport={triggerImport} />
       <div className="body">
-        <Toolbar />
+        <Toolbar onHelp={() => setGuideOpen(true)} />
         <CanvasStage onImport={triggerImport} onFiles={handleFiles} />
         <Sidebar onImport={triggerImport} />
       </div>
@@ -104,6 +107,8 @@ export default function App() {
           onCancel={() => setPdfPick(null)}
         />
       )}
+
+      {guideOpen && <Guide onClose={() => setGuideOpen(false)} onImport={triggerImport} />}
 
       {loadingMsg && (
         <div className="modal-back">
