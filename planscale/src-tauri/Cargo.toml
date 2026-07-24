@@ -1,6 +1,6 @@
 [package]
 name = "planmapper"
-version = "0.2.0"
+version = "0.3.0"
 description = "PlanMapper — plan measuring & tracing"
 authors = ["PlanMapper"]
 license = ""
