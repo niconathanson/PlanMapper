@@ -7,11 +7,27 @@ import type { Vec2 } from '../core/types';
 
 const toStage = (p: Vec2) => [p.x * PX_PER_M, p.y * PX_PER_M];
 
-function Tooltip({ x, y, text, viewScale }: { x: number; y: number; text: string; viewScale: number }) {
+function Tooltip({
+  x,
+  y,
+  text,
+  viewScale,
+  viewRot = 0,
+  dy = -10,
+}: {
+  x: number;
+  y: number;
+  text: string;
+  viewScale: number;
+  viewRot?: number;
+  dy?: number;
+}) {
   const s = 1 / viewScale;
+  // Counter the view rotation so the box is always upright on screen; offsetY is
+  // then a consistent screen-space nudge away from the anchor.
   return (
-    <Label x={x} y={y} scaleX={s} scaleY={s} listening={false} offsetY={-10}>
-      <Tag fill="rgba(20,20,20,0.9)" cornerRadius={3} pointerDirection="down" pointerWidth={6} pointerHeight={4} />
+    <Label x={x} y={y} rotation={-viewRot} scaleX={s} scaleY={s} listening={false} offsetY={dy}>
+      <Tag fill="rgba(20,20,20,0.9)" cornerRadius={3} />
       <Text text={text} fontSize={12} padding={5} fill="#fff" fontFamily="system-ui, sans-serif" />
     </Label>
   );
@@ -21,10 +37,12 @@ export function DraftOverlay({
   draft,
   units,
   viewScale,
+  viewRot = 0,
 }: {
   draft: DrawDraft;
   units: UnitSystem;
   viewScale: number;
+  viewRot?: number;
 }) {
   const pts = draft.pts;
   const cursor = draft.cursor;
@@ -36,31 +54,23 @@ export function DraftOverlay({
   const flat = preview.flatMap(toStage);
   const isPolygon = draft.tool === 'polygon';
 
-  // live segment length (from last committed point to cursor)
-  let segLabel: React.ReactNode = null;
+  // Current segment length + running total, anchored just above the cursor (a
+  // fixed screen offset) so the box never sits on the point being placed and
+  // doesn't drift away on long segments.
+  let cursorLabel: React.ReactNode = null;
   if (cursor && pts.length > 0) {
     const last = pts[pts.length - 1];
-    const mid = { x: (last.x + cursor.x) / 2, y: (last.y + cursor.y) / 2 };
-    segLabel = (
-      <Tooltip
-        x={mid.x * PX_PER_M}
-        y={mid.y * PX_PER_M}
-        viewScale={viewScale}
-        text={fmtLen(dist(last, cursor), units)}
-      />
-    );
-  }
-
-  // running total near cursor
-  let totalLabel: React.ReactNode = null;
-  if (cursor && pts.length >= 1) {
-    const total = pathLength([...pts, cursor]);
-    totalLabel = (
+    const seg = fmtLen(dist(last, cursor), units);
+    const total = fmtLen(pathLength([...pts, cursor]), units);
+    const closeHint = isPolygon && pts.length >= 2 ? '  ·  ⏎ close' : '';
+    cursorLabel = (
       <Tooltip
         x={cursor.x * PX_PER_M}
-        y={cursor.y * PX_PER_M + 22 / viewScale}
+        y={cursor.y * PX_PER_M}
         viewScale={viewScale}
-        text={`Σ ${fmtLen(total, units)}${isPolygon && pts.length >= 2 ? '  (dbl-click / Enter to close)' : ''}`}
+        viewRot={viewRot}
+        dy={-16}
+        text={`${seg}   Σ ${total}${closeHint}`}
       />
     );
   }
@@ -75,8 +85,7 @@ export function DraftOverlay({
         <Circle key={i} x={p.x * PX_PER_M} y={p.y * PX_PER_M} radius={r} fill="#fff" stroke={color} strokeWidth={sw} />
       ))}
       {cursor && <Circle x={cursor.x * PX_PER_M} y={cursor.y * PX_PER_M} radius={r} fill={color} />}
-      {segLabel}
-      {totalLabel}
+      {cursorLabel}
     </Group>
   );
 }
@@ -85,10 +94,12 @@ export function ScaleOverlay({
   scaleDraft,
   units,
   viewScale,
+  viewRot = 0,
 }: {
   scaleDraft: ScaleDraft;
   units: UnitSystem;
   viewScale: number;
+  viewRot?: number;
 }) {
   const { a, b } = scaleDraft;
   const sw = 2 / viewScale;
@@ -104,6 +115,7 @@ export function ScaleOverlay({
           x={((a.x + b.x) / 2) * PX_PER_M}
           y={((a.y + b.y) / 2) * PX_PER_M}
           viewScale={viewScale}
+          viewRot={viewRot}
           text={`measured: ${fmtLen(dist(a, b), units)}`}
         />
       )}

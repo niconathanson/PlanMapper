@@ -97,8 +97,9 @@ Bare single letters switch tools; **Ctrl/Cmd+letter is reserved for document
 commands** (undo/redo/save), so letters never collide. Ignored while typing in a
 field. Map: **S** Select · **P** Pan · **O** Origin · **C** Scale · **D** Point ·
 **L** Line · **G** Polygon · **R** Rect · **F** Fan. A collapsible semi-transparent
-cheat sheet (`.keycard`, always-dark in both themes) sits top-right of the canvas;
-keep `TOOL_KEYS`, the `HOTKEYS` array, and the Toolbar tooltips in sync.
+cheat sheet (`.keycard`, always-dark in both themes) sits top-right of the canvas,
+laid out as two columns (`HOTKEYS_VIEW` = view/setup tools · `HOTKEYS_DRAW` = drawable
+items); keep `TOOL_KEYS`, both `HOTKEYS_*` arrays, and the Toolbar tooltips in sync.
 
 ### Interaction (`src/canvas/CanvasStage.tsx`) — the big file
 
@@ -112,9 +113,19 @@ image → grid (on top of image) → origin axes → objects → drafts.
 
 Probe / polygon / path / area rendering + editing. Whole-object drag via a draggable
 Group (`onGroupDragEnd` **ignores child-handle drag-end bubbling** via
-`e.target !== e.currentTarget`). Areas have corner resize handles: rectangles do a
-box resize anchoring the opposite corner; fans keep the symmetric trapezoid per edge.
-Drags/handles snap through `ctx.snap`.
+`e.target !== e.currentTarget`). Drags/handles snap through `ctx.snap`. Labels
+counter-rotate by `-ctx.viewRot` (via `ScreenLabel`) so text stays upright when the
+view is rotated.
+
+**Area/fan model.** Both rect and fan are **drag-to-create** (`makeRectFromBounds` /
+`makeFanFromBounds`, axis-aligned, opening along world +x). Corner handles
+(`resizeCorner`): rect = box resize anchoring the opposite corner; fan = symmetric
+trapezoid where **either edge can lengthen** (near-corner drag moves the near edge with
+the far edge fixed, and vice-versa) and dragging a corner **past the opposite edge
+flips** the fan 180° about that edge. Fans can round each edge into an apex-centred arc
+(`arcSteps` far, `nearArcSteps` near → annular sector); the drawn shape and area come
+from `areaOutline` in `geometry.ts`, while handles stay on the 4 trapezoid
+`areaCorners`.
 
 ### Units (`src/core/units.ts`)
 
@@ -124,9 +135,19 @@ inch), `ft-dec` (33.500 ft), `m`. Format + parse per system.
 ### Other
 
 `src/core/loadFile.ts` (image + pdf.js page render/thumbs), `src/core/project.ts`
-(save/load `.planscale`, CSV/clipboard export), `src/core/readout.ts` (formatting
-helpers), `src/ui/*` (TopBar, Toolbar, Sidebar, SnappingMenu popover, PagePicker,
-NumberField with `live` mode, icons).
+(save/load `.planscale`, CSV/clipboard export, **`objectsToVectorworks`** — a
+Vectorworks/Soundvision `.txt` vertex export in meters/Y-up; header line reads
+`"; PLANSCALE"`), `src/core/readout.ts` (formatting helpers), `src/ui/*` (TopBar,
+Toolbar, Sidebar, SnappingMenu popover, PagePicker, NumberField with `live` mode, icons).
+
+### Scaling (`store.applyScale`)
+
+Two-point scale multiplies `image.mPerPx` by `factor` **and**: recenters the image about
+the origin, **scales every object about the origin** by the same factor (so placed
+geometry stays glued to plan features on a re-scale), and **compensates `view.scale` by
+1/factor** (pinning the origin on screen) so the plan doesn't appear to grow/shrink —
+only the coordinate readouts change. (`view` isn't in the undo snapshot, so undoing a
+scale reverts geometry but not the zoom — minor.)
 
 ## OPEN ITEMS
 
@@ -152,9 +173,23 @@ Fixed as diagnosed. `recenterImageForOrigin(image, O, O′)` in `store.ts` keeps
 `nudgeOrigin`. Regression-tested in-browser: 30° image, origin moved by click/drag/arrows
 → rendered plan position drifts < 1e-15 m.
 
+### 4. Fan redesign, safe re-scaling, export, UI polish — ✅ DONE (2026-07-24)
+Fan is now drag-to-create with robust resize + flip + far/near arc rounding (see
+Area/fan model above). Two-point scaling keeps the plan's on-screen size and scales
+objects about the origin (see Scaling above). Added the Vectorworks/Soundvision `.txt`
+exporter; CSV/copy/txt all emit the full fan `areaOutline` incl. arc points. Canvas
+measurement/label boxes stay upright under view rotation and the live draw label is
+anchored just above the cursor (fixed screen offset) so it never blocks short segments.
+Zoombar rotation-reset button is always rendered (disabled at 0°) so the rotate buttons
+don't shift under the cursor.
+
 ## Also worth doing eventually
 - Package as a Windows `.exe` (Electron) so the user drops the terminal entirely.
 - The one flow never tested end-to-end here: importing a **real** plan PDF/JPG (the OS
   file dialog can't be driven from the headless preview pane). Highest-value manual test.
-- Fan areas resize symmetrically per edge (model limitation); free corner resize would
-  need a general-trapezoid model.
+- **Round-trip test the `.txt` export** in the real design software (Soundvision/VW) — the
+  format matches the sample but hasn't been verified by an actual import.
+- Optional: make a drag-created fan open **along the drag direction** instead of world +x
+  (user flagged the fixed +x orientation as minor; deferred).
+- Fan rounding assumes far edge wider than near (needs an apex); a general free-corner
+  trapezoid model would be a larger change.

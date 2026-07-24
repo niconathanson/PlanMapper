@@ -181,7 +181,7 @@ export function objectsToVectorworks(
     return areaOutline(o);
   };
   const lines: string[] = [
-    '"; VECTORWORKS"',
+    '"; PLANSCALE"',
     '";"',
     '";   using Outside is front (white)"',
     '";   using Name By Layer"',

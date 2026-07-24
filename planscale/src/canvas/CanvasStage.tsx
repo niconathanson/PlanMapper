@@ -578,6 +578,7 @@ export function CanvasStage({
               units: s.units,
               frame: { origin: s.origin, rotationDeg: s.originRotationDeg },
               viewScale: view.scale,
+              viewRot: view.rot,
               selectedId: s.selectedId,
               editable: s.tool === 'select' && !panning,
               labelBg: cc.labelBg,
@@ -589,8 +590,10 @@ export function CanvasStage({
           />
         </Layer>
         <Layer listening={false}>
-          {s.draft && <DraftOverlay draft={s.draft} units={s.units} viewScale={view.scale} />}
-          {s.scaleDraft && <ScaleOverlay scaleDraft={s.scaleDraft} units={s.units} viewScale={view.scale} />}
+          {s.draft && <DraftOverlay draft={s.draft} units={s.units} viewScale={view.scale} viewRot={view.rot} />}
+          {s.scaleDraft && (
+            <ScaleOverlay scaleDraft={s.scaleDraft} units={s.units} viewScale={view.scale} viewRot={view.rot} />
+          )}
           {areaDrag && (
             <Rect
               x={Math.min(areaDrag.start.x, areaDrag.cur.x) * PX_PER_M}
@@ -665,15 +668,16 @@ export function CanvasStage({
         <button onClick={() => setViewRot(view.rot + 15)} title="Rotate view right 15°">
           ⟳
         </button>
-        {view.rot !== 0 && (
-          <button
-            onClick={() => setViewRot(0)}
-            title="Reset view rotation to upright"
-            style={{ width: 'auto', padding: '0 8px' }}
-          >
-            {Math.round(((view.rot % 360) + 360) % 360)}°
-          </button>
-        )}
+        {/* Always rendered (fixed width) so the rotate buttons never shift under
+            the cursor; disabled at 0° since there's nothing to reset. */}
+        <button
+          onClick={() => setViewRot(0)}
+          disabled={view.rot === 0}
+          title="Reset view rotation to upright"
+          style={{ width: 'auto', minWidth: 46, padding: '0 8px' }}
+        >
+          {Math.round(((view.rot % 360) + 360) % 360)}°
+        </button>
         <button onClick={() => zoomAtCenter(1 / 1.2)} title="Zoom out">
           −
         </button>

@@ -14,6 +14,7 @@ interface Ctx {
   units: UnitSystem;
   frame: OriginFrame;
   viewScale: number;
+  viewRot: number;
   selectedId: string | null;
   editable: boolean; // tool === 'select'
   labelBg: string;
@@ -26,12 +27,14 @@ interface Ctx {
 const toStage = (p: Vec2) => [p.x * PX_PER_M, p.y * PX_PER_M];
 
 // A small text label with a translucent background that stays a constant
-// on-screen size regardless of zoom.
+// on-screen size regardless of zoom, and upright regardless of view rotation
+// (it counter-rotates by -viewRot so text is always horizontal on screen).
 function ScreenLabel({
   x,
   y,
   text,
   viewScale,
+  viewRot = 0,
   color = '#111',
   bg = 'rgba(255,255,255,0.85)',
   stroke = 'rgba(0,0,0,0.09)',
@@ -40,13 +43,14 @@ function ScreenLabel({
   y: number;
   text: string;
   viewScale: number;
+  viewRot?: number;
   color?: string;
   bg?: string;
   stroke?: string;
 }) {
   const s = 1 / viewScale;
   return (
-    <Label x={x} y={y} scaleX={s} scaleY={s} listening={false} offsetY={-8}>
+    <Label x={x} y={y} rotation={-viewRot} scaleX={s} scaleY={s} listening={false} offsetY={-8}>
       <Tag fill={bg} cornerRadius={3} stroke={stroke} />
       <Text text={text} fontSize={12} padding={4} fill={color} fontFamily="system-ui, sans-serif" />
     </Label>
@@ -104,6 +108,7 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
           x={sx}
           y={sy}
           viewScale={ctx.viewScale}
+          viewRot={ctx.viewRot}
           color={obj.color}
           bg={ctx.labelBg}
           stroke={ctx.labelStroke}
@@ -176,6 +181,7 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
           x={cx * PX_PER_M}
           y={cy * PX_PER_M}
           viewScale={ctx.viewScale}
+          viewRot={ctx.viewRot}
           color={obj.color}
           bg={ctx.labelBg}
           stroke={ctx.labelStroke}
@@ -227,13 +233,24 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
       if (i === 0 || i === 1) {
         // Near corners: move the near edge along the axis (far edge fixed). local.x
         // can go negative to lengthen backward past the original near edge.
-        const length = Math.max(0.05, obj.length - local.x);
-        const shift = obj.length - length; // distance the near edge advanced along +x
-        ctx.onUpdate(obj.id, {
-          origin: { x: obj.origin.x + u.x * shift, y: obj.origin.y + u.y * shift },
-          length,
-          wNear: 2 * half,
-        } as Partial<SceneObject>);
+        const raw = obj.length - local.x;
+        if (raw < 0) {
+          // Near edge dragged past the far edge → flip the fan about the far edge.
+          ctx.onUpdate(obj.id, {
+            rotationDeg: obj.rotationDeg + 180,
+            origin: { x: obj.origin.x + u.x * local.x, y: obj.origin.y + u.y * local.x },
+            length: Math.max(0.05, -raw),
+            wNear: 2 * half,
+          } as Partial<SceneObject>);
+        } else {
+          const length = Math.max(0.05, raw);
+          const shift = obj.length - length; // distance the near edge advanced along +x
+          ctx.onUpdate(obj.id, {
+            origin: { x: obj.origin.x + u.x * shift, y: obj.origin.y + u.y * shift },
+            length,
+            wNear: 2 * half,
+          } as Partial<SceneObject>);
+        }
       } else if (local.x < 0) {
         // Far corner dragged back through the origin → flip the fan to point the
         // other way (rotate 180° about the near edge / origin).
@@ -294,6 +311,7 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
         x={c.x * PX_PER_M}
         y={c.y * PX_PER_M}
         viewScale={ctx.viewScale}
+        viewRot={ctx.viewRot}
         color={obj.color}
         bg={ctx.labelBg}
         stroke={ctx.labelStroke}
