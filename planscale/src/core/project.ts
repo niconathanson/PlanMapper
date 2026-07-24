@@ -1,11 +1,11 @@
-// Project save/load (single portable .planscale JSON file, image embedded) and
+// Project save/load (single portable .planmapper JSON file, image embedded) and
 // coordinate export (CSV / clipboard).
 
 import type { ProjectData, SceneObject } from './types';
 import { toDisplay, areaOutline, pathLength, polygonArea, polygonPerimeter } from './geometry';
 import { formatLength, type UnitSystem, FT_PER_M } from './units';
 
-const EXT = '.planscale';
+const EXT = '.planmapper';
 
 // Minimal typings for the File System Access API (not in older TS DOM libs).
 interface FilePickerWindow {
@@ -35,7 +35,7 @@ export async function saveProject(data: ProjectData, suggestedName = 'plan'): Pr
     try {
       const handle = await w.showSaveFilePicker({
         suggestedName: suggestedName + EXT,
-        types: [{ description: 'PlanScale project', accept: { 'application/json': [EXT] } }],
+        types: [{ description: 'PlanMapper project', accept: { 'application/json': [EXT] } }],
       });
       const writable = await handle.createWritable();
       await writable.write(json);
@@ -55,7 +55,7 @@ export async function openProject(): Promise<ProjectData | null> {
   if (w.showOpenFilePicker) {
     try {
       const [handle] = await w.showOpenFilePicker({
-        types: [{ description: 'PlanScale project', accept: { 'application/json': [EXT] } }],
+        types: [{ description: 'PlanMapper project', accept: { 'application/json': [EXT] } }],
       });
       const file = await handle.getFile();
       const text = await file.text();
@@ -181,7 +181,7 @@ export function objectsToVectorworks(
     return areaOutline(o);
   };
   const lines: string[] = [
-    '"; PLANSCALE"',
+    '"; PLANMAPPER"',
     '";"',
     '";   using Outside is front (white)"',
     '";   using Name By Layer"',

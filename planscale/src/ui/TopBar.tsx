@@ -36,13 +36,13 @@ export function TopBar({ onImport }: { onImport: () => void }) {
     <div className="topbar">
       <div className="brand">
         <span className="dot" />
-        PlanScale
+        PlanMapper
       </div>
 
       <button className="tbtn primary" onClick={onImport} title="Import a PDF or image plan">
         {Icon.open()} Import plan
       </button>
-      <button className="tbtn" onClick={doOpen} title="Open a saved .planscale project">
+      <button className="tbtn" onClick={doOpen} title="Open a saved .planmapper project">
         {Icon.open()} Open
       </button>
       <button className="tbtn" onClick={doSave} title="Save project">

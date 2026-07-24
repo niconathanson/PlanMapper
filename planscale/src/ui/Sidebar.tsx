@@ -388,7 +388,7 @@ function ObjectListPanel({ frame }: { frame: OriginFrame }) {
 
 function ExportPanel({ frame }: { frame: OriginFrame }) {
   const s = useStore();
-  const base = s.image?.name?.replace(/\.[^.]+$/, '') || 'planscale';
+  const base = s.image?.name?.replace(/\.[^.]+$/, '') || 'planmapper';
   const csv = () => exportCsv(objectsToCsv(s.objects, frame, s.units), base);
   const vw = () => exportVectorworks(objectsToVectorworks(s.objects, frame), base);
   const copyAll = () =>

@@ -1,4 +1,7 @@
-# PlanScale — Handoff Notes
+# PlanMapper — Handoff Notes
+
+> Product name is **PlanMapper**; the app's working directory is still `planscale/`
+> internally (not renamed to avoid churn in dev tooling — invisible to users).
 
 Working notes for continuing development in a fresh session. Pairs with `README.md`
 (user-facing) and the Claude memory files.
@@ -39,16 +42,16 @@ code is Tauri-specific — the frontend is the same web app (file I/O uses the b
 File System Access API with download/`<input>` fallbacks, which work in the webview).
 
 - **Build:** `npm run app:build` (= `tauri build`; runs `npm run build` first via
-  `beforeBuildCommand`). Output: `src-tauri/target/release/planscale.exe` (~8.7 MB,
+  `beforeBuildCommand`). Output: `src-tauri/target/release/planmapper.exe` (~8.7 MB,
   **portable single exe**, needs the WebView2 runtime that ships with Win10/11) and an
-  NSIS installer at `.../release/bundle/nsis/PlanScale_0.1.0_x64-setup.exe`.
+  NSIS installer at `.../release/bundle/nsis/PlanMapper_0.1.0_x64-setup.exe`.
 - **Requires Rust ≥ 1.85** (a transitive dep needs edition 2024). Plus MSVC C++ build
   tools (VS2022) — both already on the dev machine.
 - Key config in `src-tauri/tauri.conf.json`: `dragDropEnabled: false` (so the webview's
   native HTML drag-drop plan import still fires instead of Tauri's OS file-drop),
   `csp: null` (permissive — needed for data-URL images + the pdf.js worker), identifier
-  `com.planscale.desktop`. Cargo package is named `planscale` so the exe is
-  `planscale.exe`. `vite.config.ts` uses relative `base: './'` for `build` only.
+  `com.planmapper.desktop`. Cargo package is named `planmapper` so the exe is
+  `planmapper.exe`. `vite.config.ts` uses relative `base: './'` for `build` only.
 - Icons in `src-tauri/icons/` are the default Tauri logos — rebrand later with
   `npx tauri icon <png>`. Unsigned → Windows SmartScreen "More info → Run anyway".
 - **macOS:** same code; must build **on a Mac** (Rust + Xcode CLT), `tauri build` →
@@ -158,9 +161,9 @@ inch), `ft-dec` (33.500 ft), `m`. Format + parse per system.
 ### Other
 
 `src/core/loadFile.ts` (image + pdf.js page render/thumbs), `src/core/project.ts`
-(save/load `.planscale`, CSV/clipboard export, **`objectsToVectorworks`** — a
+(save/load `.planmapper`, CSV/clipboard export, **`objectsToVectorworks`** — a
 Vectorworks/Soundvision `.txt` vertex export in meters/Y-up; header line reads
-`"; PLANSCALE"`), `src/core/readout.ts` (formatting helpers), `src/ui/*` (TopBar,
+`"; PLANMAPPER"`), `src/core/readout.ts` (formatting helpers), `src/ui/*` (TopBar,
 Toolbar, Sidebar, SnappingMenu popover, PagePicker, NumberField with `live` mode, icons).
 
 ### Scaling (`store.applyScale`)

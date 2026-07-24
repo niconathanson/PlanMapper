@@ -166,7 +166,7 @@ interface AppState {
   redo: () => void;
 }
 
-const THEME_KEY = 'planscale.theme';
+const THEME_KEY = 'planmapper.theme';
 function initialTheme(): 'dark' | 'light' {
   try {
     const v = localStorage.getItem(THEME_KEY);

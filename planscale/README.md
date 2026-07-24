@@ -1,4 +1,4 @@
-# PlanScale
+# PlanMapper
 
 A dedicated tool for measuring, scaling, and tracing over PDF / image site & floor
 plans — built to replace the off-label use of audio-sim software (Danley Direct) for
@@ -23,7 +23,7 @@ event planning layout work.
     widths).
 - **45° / 90° angle snap** and **snap-to-existing-point** while drawing.
 - **Editable tables**: nudge any coordinate/dimension numerically.
-- **Save / load** projects (`.planscale`, image embedded so the file is self-contained).
+- **Save / load** projects (`.planmapper`, image embedded so the file is self-contained).
 - **Export** all coordinates to CSV or copy to clipboard.
 
 ## Running it (development)
@@ -35,7 +35,7 @@ npm install      # first time only
 npm run dev      # then open the printed http://localhost:5173 in Chrome or Edge
 ```
 
-Or double-click **`Start PlanScale.bat`** in the parent folder.
+Or double-click **`Start PlanMapper.bat`** in the parent folder.
 
 ## Keyboard
 
@@ -43,11 +43,19 @@ Or double-click **`Start PlanScale.bat`** in the parent folder.
 - **Enter** — finish current line/polygon · **Esc** — cancel · **Backspace** — remove last point
 - **Delete** — delete selected object · **Ctrl+Z / Ctrl+Y** — undo / redo
 
-## Building a standalone app (later)
+## Building a standalone app
 
-The app is browser-based today. To ship it as a double-click Windows `.exe`, it can be
-wrapped with Electron (`npm run build` output + an Electron shell). Not set up yet — a
-planned follow-up.
+Packaged as a desktop app with **Tauri** (see `src-tauri/`). Build a portable Windows
+executable with:
+
+```bash
+npm run app:build
+```
+
+Output: `src-tauri/target/release/planmapper.exe` (portable, double-click to run — needs
+the WebView2 runtime that ships with Windows 10/11) plus an installer under
+`src-tauri/target/release/bundle/nsis/`. macOS (`.app`/`.dmg`) builds the same way but
+must be run on a Mac.
 
 ## Tech
 

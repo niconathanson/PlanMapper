@@ -1,8 +1,8 @@
 [package]
-name = "planscale"
+name = "planmapper"
 version = "0.1.0"
-description = "PlanScale — plan measuring & tracing"
-authors = ["PlanScale"]
+description = "PlanMapper — plan measuring & tracing"
+authors = ["PlanMapper"]
 license = ""
 repository = ""
 edition = "2021"

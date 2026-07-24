@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<title>PlanMapper 16px</title>
+<rect width="16" height="16" rx="3.5" fill="#185FA5"/>
+<path d="M3.5 5.75 L9 2.75 L12.5 9.25 L6 13.5 Z" fill="#FFFFFF" fill-opacity="0.22" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
+<circle cx="3.5" cy="5.75" r="1.7" fill="#EF9F27"/>
+<circle cx="9" cy="2.75" r="1.7" fill="#EF9F27"/>
+<circle cx="12.5" cy="9.25" r="1.7" fill="#EF9F27"/>
+<circle cx="6" cy="13.5" r="1.7" fill="#EF9F27"/>
+</svg>

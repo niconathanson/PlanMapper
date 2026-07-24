@@ -1,5 +1,5 @@
 @echo off
-title PlanScale
+title PlanMapper
 cd /d "%~dp0planscale"
 
 if not exist node_modules (
@@ -8,7 +8,7 @@ if not exist node_modules (
 )
 
 echo.
-echo Starting PlanScale. Your browser will open automatically.
+echo Starting PlanMapper. Your browser will open automatically.
 echo Keep this window open while you use the app. Close it to stop.
 echo.
 
