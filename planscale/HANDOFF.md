@@ -57,9 +57,16 @@ File System Access API with download/`<input>` fallbacks, which work in the webv
   `planmapper.exe`. `vite.config.ts` uses relative `base: './'` for `build` only.
 - Icons in `src-tauri/icons/` are the default Tauri logos — rebrand later with
   `npx tauri icon <png>`. Unsigned → Windows SmartScreen "More info → Run anyway".
-- **macOS:** same code; must build **on a Mac** (Rust + Xcode CLT), `tauri build` →
-  `.app`/`.dmg`. M-series build is arm64-only; use `--target universal-apple-darwin`
-  for Intel-Mac colleagues. Unsigned → Gatekeeper right-click-Open.
+- **macOS:** same code; must build **on a Mac** (Rust + Xcode CLT), `npm run app:build`
+  → `.app`/`.dmg` in `src-tauri/target/release/bundle/`. The base config's
+  `bundle.targets` is `["nsis"]` (Windows), so `src-tauri/tauri.macos.conf.json`
+  overrides it to `["app","dmg"]` — Tauri auto-merges `tauri.<platform>.conf.json`
+  (RFC 7396 merge patch), no flag needed. M-series builds arm64-only; add
+  `-- --target universal-apple-darwin` (after `rustup target add x86_64-apple-darwin
+  aarch64-apple-darwin`) for Intel-Mac colleagues. Unsigned → Gatekeeper right-click-Open.
+  **When moving the repo to a Mac:** build on the internal drive, not a FAT/exFAT
+  stick, and delete the Windows-built `node_modules/` and `src-tauri/target/` first
+  (`npm install` re-fetches the native binaries for macOS).
 
 ## Architecture
 
