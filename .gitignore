@@ -36,3 +36,6 @@ Thumbs.db
 
 # macOS AppleDouble sidecars, created when a Mac writes to a FAT/exFAT volume
 ._*
+
+# Reference screenshots of client work — kept locally, never published
+PDF-JPG samples/

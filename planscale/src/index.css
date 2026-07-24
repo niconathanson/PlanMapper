@@ -58,6 +58,10 @@ button {
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
+  /* Without this, buttons that don't set a colour fall back to the UA's
+     `buttontext`, which resolves white under `color-scheme: dark light` — and
+     goes invisible on the light theme's white panels (unit seg, zoom bar). */
+  color: inherit;
 }
 
 input,

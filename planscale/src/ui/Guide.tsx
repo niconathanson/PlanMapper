@@ -1,7 +1,7 @@
 // First-run walkthrough. Shown automatically the first time the app opens on a
 // machine (flag in localStorage), and re-openable any time from the "?" button at
 // the bottom of the tool rail.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 const SEEN_KEY = 'planmapper.guideSeen';
 
@@ -385,10 +385,10 @@ export function Guide({ onClose, onImport }: { onClose: () => void; onImport?: (
   const [i, setI] = useState(0);
   const last = i === STEPS.length - 1;
 
-  const close = () => {
+  const close = useCallback(() => {
     markGuideSeen();
     onClose();
-  };
+  }, [onClose]);
 
   // Own the keyboard while open. CanvasStage's window handler bails out whenever a
   // .modal-back is mounted, so these don't collide with the tool hotkeys.
@@ -405,7 +405,7 @@ export function Guide({ onClose, onImport }: { onClose: () => void; onImport?: (
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [close]);
 
   const step = STEPS[i];
   return (

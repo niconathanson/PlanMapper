@@ -13,7 +13,9 @@ set a 0,0 origin, and trace points / lines (cable runs) / polygons / audience ar
 with coordinate + length + area readouts. Replaces off-label use of Danley Direct for
 event layout. **No audio features.**
 
-App lives in `planscale/`. Sample Direct screenshots in `../PDF-JPG samples/`.
+App lives in `planscale/`. Reference Direct screenshots are in `../PDF-JPG samples/` on
+the dev machine only — they show client work, so they're gitignored and were scrubbed
+from history before the repo was published.
 Git repo is at the parent folder; I (assistant) manage all commits. User is
 non-technical re: tooling — deliverables should stay double-click runnable.
 

@@ -1,0 +1,85 @@
+name: release
+
+# Builds the desktop app for Windows and macOS and attaches the installers to a
+# GitHub Release. Push a tag (v0.3.0) to cut a release; run it manually from the
+# Actions tab to get the same artifacts without publishing anything.
+#
+# Before tagging, bump the version in all three places so they agree:
+#   planscale/package.json · planscale/src-tauri/Cargo.toml · planscale/src-tauri/tauri.conf.json
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # One universal binary that runs on both Apple Silicon and Intel Macs.
+          - platform: macos-latest
+            args: '--target universal-apple-darwin'
+            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+          - platform: windows-latest
+            args: ''
+            rust-targets: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: planscale/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: planscale/src-tauri -> target
+
+      - name: Install dependencies
+        working-directory: planscale
+        run: npm ci
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        id: tauri
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: planscale
+          # On a tag push this creates/updates a draft release and uploads the
+          # installers to it. On a manual run both are empty, so it just builds.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('PlanMapper {0}', github.ref_name) || '' }}
+          releaseDraft: true
+          releaseBody: |
+            Desktop builds of PlanMapper.
+
+            - **Windows** — `PlanMapper_<version>_x64-setup.exe` (installer). Unsigned, so
+              SmartScreen shows a warning: **More info → Run anyway**.
+            - **macOS** — `PlanMapper_<version>_universal.dmg`, runs on both Apple Silicon
+              and Intel. Unsigned, so the first launch is **right-click → Open → Open**.
+          args: ${{ matrix.args }}
+
+      # Manual runs have no release to attach to — keep the binaries as artifacts.
+      - name: Upload build artifacts
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: planmapper-${{ matrix.platform }}
+          if-no-files-found: error
+          path: |
+            planscale/src-tauri/target/release/bundle/nsis/*.exe
+            planscale/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg

@@ -1,0 +1,35 @@
+name: ci
+
+# Fast check on every push: type-check and bundle the web app. Catches the
+# errors worth catching before you tag a release and wait on the slow
+# cross-platform build.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: planscale/package-lock.json
+
+      - name: Install dependencies
+        working-directory: planscale
+        run: npm ci
+
+      - name: Lint
+        working-directory: planscale
+        run: npm run lint
+
+      - name: Type-check and build
+        working-directory: planscale
+        run: npm run build
