@@ -14,8 +14,7 @@ dimensions. The usual workaround is to open photoshop, vectorworks, sketchup or 
 off-label as a measuring tool, which is heavy, awkward, and full of features you don't
 want.
 
-PlanMapper does that one job. **It has no audio features and never will** — no
-prediction, no SPL, no speaker models. It measures plans and exports coordinates. 
+PlanMapper does that one job, and does it really well.
 
 ## Download
 
