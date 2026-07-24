@@ -374,12 +374,18 @@ export function CanvasStage({
         e.preventDefault();
         const [ux, uy] = ARROWS[e.key];
         const step = e.shiftKey ? s.nudgeCoarse : s.nudgeFine;
-        if (s.selectedId) s.nudgeSelected(ux * step, uy * step);
-        else s.nudgeOrigin(ux * step, uy * step);
+        // In origin mode the origin moves and objects are locked; otherwise the
+        // selected object moves. (Arrow nudges are never grid-snapped.)
+        if (s.tool === 'origin') s.nudgeOrigin(ux * step, uy * step);
+        else s.nudgeSelected(ux * step, uy * step);
         return;
       }
       if (e.key === 'Enter' && s.draft) {
         s.commitDraft();
+      } else if (e.key === 'Enter' && s.tool === 'origin') {
+        // Lock the plan and return to the tool used before entering origin mode.
+        if (s.image && !s.locked) s.lockPlan();
+        s.setTool(s.toolBeforeOrigin || 'pan');
       } else if (e.key === 'Enter' && s.image && !s.locked) {
         s.lockPlan(); // lock the plan to the origin
       } else if (e.key === 'Escape') {
@@ -471,9 +477,6 @@ export function CanvasStage({
         onContextMenu={onContextMenu}
         onDragEnd={onStageDragEnd}
       >
-        <Layer listening={false}>
-          {s.gridVisible && <Grid view={view} width={size.w} height={size.h} stroke={cc.grid} />}
-        </Layer>
         <Layer>
           {s.image && (
             <PlanImageNode
@@ -483,6 +486,10 @@ export function CanvasStage({
               onDragEnd={(c) => s.updateImage({ center: c })}
             />
           )}
+        </Layer>
+        {/* Grid sits above the image so it reads on top of the plan. */}
+        <Layer listening={false}>
+          {s.gridVisible && <Grid view={view} width={size.w} height={size.h} stroke={cc.grid} />}
         </Layer>
         <Layer listening={false}>
           <OriginAxes
@@ -505,6 +512,7 @@ export function CanvasStage({
               editable: s.tool === 'select' && !panning,
               labelBg: cc.labelBg,
               labelStroke: cc.labelStroke,
+              snap: gridSnap,
               onSelect: (id: string) => s.select(id),
               onUpdate: (id: string, patch: Partial<SceneObject>) => s.updateObject(id, patch),
             }}

@@ -1,6 +1,6 @@
 import { Line, Circle, Group, Label, Tag, Text } from 'react-konva';
 import type Konva from 'konva';
-import { PX_PER_M, areaCorners, areaCenter } from '../core/geometry';
+import { PX_PER_M, areaCorners, areaCenter, rotate, sub } from '../core/geometry';
 import { fmtLen, fmtArea, fmtCoord } from '../core/readout';
 import {
   polygonArea,
@@ -8,7 +8,7 @@ import {
 } from '../core/geometry';
 import type { OriginFrame } from '../core/geometry';
 import type { UnitSystem } from '../core/units';
-import type { SceneObject, Vec2 } from '../core/types';
+import type { AreaObj, SceneObject, Vec2 } from '../core/types';
 
 interface Ctx {
   units: UnitSystem;
@@ -18,6 +18,7 @@ interface Ctx {
   editable: boolean; // tool === 'select'
   labelBg: string;
   labelStroke: string;
+  snap: (p: Vec2) => Vec2; // grid-snap a world point (identity if snapping off)
   onSelect: (id: string) => void;
   onUpdate: (id: string, patch: Partial<SceneObject>) => void;
 }
@@ -88,7 +89,9 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
         onTap={() => ctx.onSelect(obj.id)}
         onDragEnd={(e) =>
           onGroupDragEnd(e, (dx, dy) =>
-            ctx.onUpdate(obj.id, { p: { x: obj.p.x + dx, y: obj.p.y + dy } } as Partial<SceneObject>),
+            ctx.onUpdate(obj.id, {
+              p: ctx.snap({ x: obj.p.x + dx, y: obj.p.y + dy }),
+            } as Partial<SceneObject>),
           )
         }
       >
@@ -125,11 +128,16 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
         onClick={() => ctx.onSelect(obj.id)}
         onTap={() => ctx.onSelect(obj.id)}
         onDragEnd={(e) =>
-          onGroupDragEnd(e, (dx, dy) =>
+          onGroupDragEnd(e, (dx, dy) => {
+            // snap the first vertex to the grid, move the rest by the same delta
+            const anchor = pts[0];
+            const snapped = ctx.snap({ x: anchor.x + dx, y: anchor.y + dy });
+            const adx = snapped.x - anchor.x;
+            const ady = snapped.y - anchor.y;
             ctx.onUpdate(obj.id, {
-              pts: pts.map((p) => ({ x: p.x + dx, y: p.y + dy })),
-            } as Partial<SceneObject>),
-          )
+              pts: pts.map((p) => ({ x: p.x + adx, y: p.y + ady })),
+            } as Partial<SceneObject>);
+          })
         }
       >
         <Line
@@ -153,7 +161,8 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
               draggable
               onDragMove={(e) => {
                 const node = e.target;
-                const np = { x: node.x() / PX_PER_M, y: node.y() / PX_PER_M };
+                const np = ctx.snap({ x: node.x() / PX_PER_M, y: node.y() / PX_PER_M });
+                node.position({ x: np.x * PX_PER_M, y: np.y * PX_PER_M });
                 const next = pts.slice();
                 next[i] = np;
                 ctx.onUpdate(obj.id, { pts: next } as Partial<SceneObject>);
@@ -181,6 +190,25 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
     obj.shape === 'rect'
       ? `${fmtLen(obj.length, ctx.units)} × ${fmtLen(obj.wNear, ctx.units)}`
       : `L ${fmtLen(obj.length, ctx.units)} · W ${fmtLen(obj.wNear, ctx.units)}→${fmtLen(obj.wFar, ctx.units)}`;
+  // Resize a corner handle: convert the (grid-snapped) world point to the area's
+  // local frame and update the dimensions. Near corners (0,1) set wNear; far
+  // corners (2,3) set length + wFar. Rectangles keep near/far widths linked.
+  const resizeCorner = (i: number, node: Konva.Node) => {
+    const world = ctx.snap({ x: node.x() / PX_PER_M, y: node.y() / PX_PER_M });
+    const local = rotate(sub(world, obj.origin), -obj.rotationDeg);
+    const half = Math.abs(local.y);
+    const patch: Partial<AreaObj> = {};
+    if (i === 0 || i === 1) {
+      patch.wNear = Math.max(0.05, 2 * half);
+      if (obj.shape === 'rect') patch.wFar = patch.wNear;
+    } else {
+      patch.length = Math.max(0.05, local.x);
+      patch.wFar = Math.max(0.05, 2 * half);
+      if (obj.shape === 'rect') patch.wNear = patch.wFar;
+    }
+    ctx.onUpdate(obj.id, patch as Partial<SceneObject>);
+  };
+
   return (
     <Group
       draggable={ctx.editable}
@@ -189,7 +217,7 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
       onDragEnd={(e) =>
         onGroupDragEnd(e, (dx, dy) =>
           ctx.onUpdate(obj.id, {
-            origin: { x: obj.origin.x + dx, y: obj.origin.y + dy },
+            origin: ctx.snap({ x: obj.origin.x + dx, y: obj.origin.y + dy }),
           } as Partial<SceneObject>),
         )
       }
@@ -204,13 +232,25 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
       />
       {selected &&
         corners.map((p, i) => (
-          <Circle key={i} x={p.x * PX_PER_M} y={p.y * PX_PER_M} radius={handleR} fill={obj.color} stroke="#fff" strokeWidth={sw / 2} />
+          <Circle
+            key={i}
+            x={p.x * PX_PER_M}
+            y={p.y * PX_PER_M}
+            radius={handleR * 1.3}
+            fill="#fff"
+            stroke={obj.color}
+            strokeWidth={sw}
+            draggable={ctx.editable}
+            onDragMove={(e) => resizeCorner(i, e.target)}
+          />
         ))}
       <ScreenLabel
         x={c.x * PX_PER_M}
         y={c.y * PX_PER_M}
         viewScale={ctx.viewScale}
         color={obj.color}
+        bg={ctx.labelBg}
+        stroke={ctx.labelStroke}
         text={`${obj.label ? obj.label + '  ·  ' : ''}${label}`}
       />
     </Group>

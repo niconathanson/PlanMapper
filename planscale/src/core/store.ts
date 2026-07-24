@@ -67,6 +67,7 @@ interface AppState {
 
   // --- UI / transient state ---
   tool: ToolId;
+  toolBeforeOrigin: ToolId; // tool to restore when leaving origin mode
   selectedId: string | null;
   view: ViewState;
   angleStep: number; // 0 = no angle snap; else snap segments to this degree step
@@ -184,6 +185,7 @@ export const useStore = create<AppState>((set, get) => {
     theme: initialTheme(),
 
     tool: 'select',
+    toolBeforeOrigin: 'pan',
     selectedId: null,
     view: { scale: 1, x: 0, y: 0, rot: 0 },
     angleStep: 45, // 45° snap on by default
@@ -202,8 +204,25 @@ export const useStore = create<AppState>((set, get) => {
     past: [],
     future: [],
 
-    setUnits: (u) => set({ units: u }),
-    setTool: (t) => set({ tool: t, draft: null, scaleDraft: null }),
+    // Switching between imperial and metric resets snap/nudge amounts to that
+    // system's natural defaults (6"/1"/1' vs 10cm/10cm/1m).
+    setUnits: (u) =>
+      set((s) => {
+        const wasMetric = s.units === 'm';
+        const isMetric = u === 'm';
+        if (wasMetric === isMetric) return { units: u };
+        return isMetric
+          ? { units: u, snapStep: 0.1, nudgeFine: 0.1, nudgeCoarse: 1 }
+          : { units: u, snapStep: 6 * (M_PER_FT / 12), nudgeFine: M_PER_FT / 12, nudgeCoarse: M_PER_FT };
+      }),
+    setTool: (t) =>
+      set((s) => ({
+        tool: t,
+        draft: null,
+        scaleDraft: null,
+        // remember what to return to when leaving origin mode
+        toolBeforeOrigin: t === 'origin' && s.tool !== 'origin' ? s.tool : s.toolBeforeOrigin,
+      })),
     setView: (v) => set({ view: v }),
     requestFit: () => set((s) => ({ fitVersion: s.fitVersion + 1 })),
     setAngleStep: (deg) => set({ angleStep: deg }),
