@@ -1,4 +1,5 @@
 import { Line, Circle, Group } from 'react-konva';
+import type Konva from 'konva';
 import { PX_PER_M, rotate } from '../core/geometry';
 import type { ViewState } from '../core/store';
 import type { Vec2 } from '../core/types';
@@ -79,6 +80,9 @@ export function OriginAxes({
   width,
   height,
   dotColor = '#111',
+  draggable = false,
+  onDragMove,
+  onDragEnd,
 }: {
   origin: Vec2;
   rotationDeg: number;
@@ -86,6 +90,9 @@ export function OriginAxes({
   width: number;
   height: number;
   dotColor?: string;
+  draggable?: boolean;
+  onDragMove?: (world: Vec2) => void;
+  onDragEnd?: (world: Vec2) => void;
 }) {
   const o = { x: origin.x * PX_PER_M, y: origin.y * PX_PER_M };
   const b = visibleStageBounds(view, width, height);
@@ -112,11 +119,31 @@ export function OriginAxes({
     />
   );
 
+  const nodeWorld = (e: Konva.KonvaEventObject<DragEvent>): Vec2 => ({
+    x: e.target.x() / PX_PER_M,
+    y: e.target.y() / PX_PER_M,
+  });
+
   return (
-    <Group listening={false}>
-      {axis(xdir, '#d64545', 'x')}
-      {axis(ydir, '#3a6ea5', 'y')}
-      <Circle x={o.x} y={o.y} radius={5 / view.scale} fill={dotColor} />
+    <Group>
+      {/* Axis lines never capture events, so only the dot is grabbable. */}
+      <Group listening={false}>
+        {axis(xdir, '#d64545', 'x')}
+        {axis(ydir, '#3a6ea5', 'y')}
+      </Group>
+      <Circle
+        x={o.x}
+        y={o.y}
+        radius={(draggable ? 6 : 5) / view.scale}
+        fill={dotColor}
+        stroke={draggable ? '#ffffff' : undefined}
+        strokeWidth={draggable ? 1.5 / view.scale : 0}
+        draggable={draggable}
+        listening={draggable}
+        hitStrokeWidth={22 / view.scale}
+        onDragMove={draggable ? (e) => onDragMove?.(nodeWorld(e)) : undefined}
+        onDragEnd={draggable ? (e) => onDragEnd?.(nodeWorld(e)) : undefined}
+      />
     </Group>
   );
 }

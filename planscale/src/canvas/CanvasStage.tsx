@@ -17,6 +17,36 @@ const MIN_SCALE = 0.02;
 const MAX_SCALE = 40;
 const SNAP_PX = 12; // vertex-snap screen threshold
 
+// Bare-letter tool switches. Document commands stay on Ctrl/Cmd, so a plain
+// letter never collides with them. Keep in sync with the toolbar tooltips and
+// the on-canvas cheat sheet (HOTKEYS below).
+type Store = ReturnType<typeof useStore.getState>;
+const TOOL_KEYS: Record<string, (st: Store) => void> = {
+  s: (st) => st.setTool('select'),
+  p: (st) => st.setTool('pan'),
+  o: (st) => st.setTool('origin'),
+  c: (st) => st.beginScale(),
+  d: (st) => st.setTool('probe'),
+  l: (st) => st.startDraft('path'),
+  g: (st) => st.startDraft('polygon'),
+  r: (st) => st.startDraft('area', 'rect'),
+  f: (st) => st.startDraft('area', 'fan'),
+};
+// Cheat-sheet columns: view/setup tools on the left, drawable items on the right.
+const HOTKEYS_VIEW: [string, string][] = [
+  ['S', 'Select'],
+  ['P', 'Pan'],
+  ['O', 'Origin'],
+  ['C', 'Scale'],
+];
+const HOTKEYS_DRAW: [string, string][] = [
+  ['D', 'Point'],
+  ['L', 'Line'],
+  ['G', 'Polygon'],
+  ['R', 'Rect'],
+  ['F', 'Fan'],
+];
+
 // Screen <-> stage-logical conversion accounting for the view rotation.
 // Stage transform is: screen = view.pos + R(rot) · (scale · logical).
 function screenToLogical(p: Vec2, view: ViewState): Vec2 {
@@ -44,6 +74,7 @@ export function CanvasStage({
   const [shiftHeld, setShiftHeld] = useState(false); // temporary pan
   const [ctrlHeld, setCtrlHeld] = useState(false); // temporarily disable snapping
   const [dragOver, setDragOver] = useState(false);
+  const [showKeys, setShowKeys] = useState(true);
   // Drag-to-size state for the rectangle area tool (world meters).
   const [areaDrag, setAreaDrag] = useState<{ start: Vec2; cur: Vec2 } | null>(null);
 
@@ -370,6 +401,15 @@ export function CanvasStage({
         return;
       }
       if (typing) return;
+      // Bare-letter tool switches (no modifier — Ctrl/Cmd are document commands).
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tk = TOOL_KEYS[e.key.toLowerCase()];
+        if (tk) {
+          e.preventDefault();
+          tk(s);
+          return;
+        }
+      }
       // Arrow keys: nudge the selected object, or the origin while placing it.
       const ARROWS: Record<string, [number, number]> = {
         ArrowUp: [0, -1],
@@ -518,7 +558,7 @@ export function CanvasStage({
         <Layer listening={false}>
           {s.gridVisible && <Grid view={view} width={size.w} height={size.h} stroke={cc.grid} />}
         </Layer>
-        <Layer listening={false}>
+        <Layer listening={s.tool === 'origin' && !modifierPan}>
           <OriginAxes
             origin={s.origin}
             rotationDeg={s.originRotationDeg}
@@ -526,6 +566,9 @@ export function CanvasStage({
             width={size.w}
             height={size.h}
             dotColor={cc.originDot}
+            draggable={s.tool === 'origin' && !modifierPan}
+            onDragMove={(w) => s.setOriginTo(w)}
+            onDragEnd={() => s.endNudge()}
           />
         </Layer>
         <Layer>
@@ -574,6 +617,40 @@ export function CanvasStage({
           </div>
         </div>
       )}
+
+      <div className={`keycard ${showKeys ? '' : 'collapsed'}`}>
+        <button
+          className="keycard-head"
+          onClick={() => setShowKeys((v) => !v)}
+          title={showKeys ? 'Hide shortcuts' : 'Show shortcuts'}
+        >
+          <span>⌨ Shortcuts</span>
+          <span className="chev">{showKeys ? '▾' : '▸'}</span>
+        </button>
+        {showKeys && (
+          <div className="keycard-body">
+            <div className="keycard-cols">
+              <div className="keycol">
+                {HOTKEYS_VIEW.map(([k, label]) => (
+                  <div className="keyrow" key={k}>
+                    <kbd>{k}</kbd>
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="keycol">
+                {HOTKEYS_DRAW.map(([k, label]) => (
+                  <div className="keyrow" key={k}>
+                    <kbd>{k}</kbd>
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="keycard-foot">Space / Shift — pan · Ctrl — no snap</div>
+          </div>
+        )}
+      </div>
 
       <div className="hud">
         {hint ? <b>{hint}</b> : <>cursor:&nbsp;<span ref={hudRef}>—</span></>}

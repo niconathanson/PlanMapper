@@ -70,6 +70,36 @@ arrow-nudge coalesces into one undo step (`withNudge` + `nudging` + `endNudge`).
 `setUnits` resets snap/nudge to imperial (6"/1"/1') or metric (10cm/10cm/1m) defaults
 when the family changes.
 
+### Import & origin workflow (settled 2026-07-24 — see `git log`)
+
+The intended setup flow, and the interaction model behind it:
+1. **Import → lands in Origin mode** (`App.tsx placeRaster` sets `tool='origin'`).
+2. **Click** the plan feature that should read 0,0 → origin drops there.
+3. **Drag the origin dot** to reposition (coarse) · **arrows** to fine-tune ·
+   **Shift/Space-drag** to pan if the feature is off-screen.
+4. **Enter** → locks the plan, returns to the previous tool.
+5. **Rotate then Scale** afterward — both already pivot on the origin, so the
+   feature stays glued to 0,0.
+
+Interaction principles the user cares about (keep these invariants):
+- **Click+drag = "reposition an object"** (rectangle, line, or the origin dot).
+- **Arrow keys = "nudge position, fine"** — never move the background.
+- **Shift = momentary app-wide pan, full stop** (CAD convention). It is *not*
+  overloaded to move the image. You never drag the image during setup: because
+  all coords are origin-relative, you place/nudge the *origin* onto the feature.
+- **Post-import, click no longer re-places the origin** by itself only in the
+  sense that origin changes should go through Origin mode (drag/arrows); the raw
+  click-to-place still lives in the `origin` tool, which is the guarded entry point.
+
+### Tool hotkeys (bare letters — `CanvasStage.tsx` `TOOL_KEYS`/`HOTKEYS`)
+
+Bare single letters switch tools; **Ctrl/Cmd+letter is reserved for document
+commands** (undo/redo/save), so letters never collide. Ignored while typing in a
+field. Map: **S** Select · **P** Pan · **O** Origin · **C** Scale · **D** Point ·
+**L** Line · **G** Polygon · **R** Rect · **F** Fan. A collapsible semi-transparent
+cheat sheet (`.keycard`, always-dark in both themes) sits top-right of the canvas;
+keep `TOOL_KEYS`, the `HOTKEYS` array, and the Toolbar tooltips in sync.
+
 ### Interaction (`src/canvas/CanvasStage.tsx`) — the big file
 
 Pointer/keyboard handling, tool dispatch, view transform (pan/zoom-to-cursor and
@@ -98,45 +128,29 @@ inch), `ft-dec` (33.500 ft), `m`. Format + parse per system.
 helpers), `src/ui/*` (TopBar, Toolbar, Sidebar, SnappingMenu popover, PagePicker,
 NumberField with `live` mode, icons).
 
-## OPEN ITEMS TO ADDRESS (from user, 2026-07-24)
+## OPEN ITEMS
 
-### 1. During import, let Shift move the IMAGE to position it under the origin
-Currently on import the tool is `pan`; a plain drag on the image moves it (image is the
-top-most draggable), a drag on the background pans. But **Shift is now a global
-temp-pan** (`modifierPan`), and while held the image is NOT draggable
-(`draggable = tool==='pan' && !modifierPan && !locked`). The user wants Shift (during
-the unlocked positioning phase) to *move the image* so they can slide a plan feature
-under where they'll click the origin — especially when the plan is at an angle.
-**Design tension to resolve:** Shift = global pan vs Shift = move-image-during-import.
-Options: (a) while unlocked + Pan tool, Shift-drag moves the image instead of panning;
-(b) use a different modifier; (c) rely on plain image drag and skip Shift here. Confirm
-with user. Closely tied to #3 — they mainly hit this trying to set the origin on an
-angled plan.
+### 1. Import/origin workflow — ✅ DONE (2026-07-24)
+Resolved by the "Import & origin workflow" section above. Decision: **Shift stays a
+pure momentary pan**; the image is never dragged during setup. Instead import lands in
+Origin mode, the **origin dot is draggable** (`OriginAxes` in `Overlays.tsx`, wired in
+`CanvasStage`), and arrows fine-tune. Drag uses `store.setOriginTo` (coalesced into one
+undo step via `withNudge`); commit on `dragEnd` via `endNudge`.
 
-### 2. Arrow-key nudge moves along the image's angled axes, should be world X/Y
-When the plan image has a non-zero rotation, nudging an object/origin with arrows
-*appears* to move along angled axes; it should move along the standard world X/Y (the
-red/blue origin axes). Code check: `nudgeSelected`/`nudgeOrigin` add raw world
-(dx,dy) — no rotation — so numerically it IS world-aligned. **Needs reproduction** to
-find the real cause. Suspects: (a) view rotation was on (world axes rotate on screen —
-but then they follow the origin axes, which may be acceptable); (b) interaction with the
-#3 origin-jump corrupting perceived position; (c) something leaking image `rotationDeg`
-into the display frame. Reproduce with an angled image, set origin, select an object,
-press arrows, and watch both the on-screen motion and the coordinate readout.
+### 2. Arrow-nudge "along angled axes" — ✅ LIKELY RESOLVED by #3; confirm on a real plan
+`nudgeSelected`/`nudgeOrigin` always added raw world (dx,dy), so the numbers were
+already world-aligned. The *perceived* angled motion was almost certainly the #3
+origin-jump swinging the plan under the dot. With #3 fixed (origin moves now keep the
+plan visually fixed), nudging on a 30°-rotated plan was verified to move the origin by
+exactly (dx,dy) with zero plan drift. **Remaining:** eyeball it once with a real angled
+plan import to be fully sure (the headless preview can't drive the OS file dialog).
 
-### 3. (Diagnosed) Clicking to set the origin on a rotated image jumps the plan
-**Root cause:** the image rotates *about the origin* (`rendered = origin + R(rot)·(center − origin)`).
-`store.setOrigin(world)` only moves the origin, so when `rotationDeg ≠ 0` the rotation
-pivot changes and the image visibly swings/jumps — the plan feature you clicked no
-longer sits under the origin dot (the dot lands at the cursor, but the image moved).
-**Fix:** when the origin moves from O→O′ and an image exists, also adjust `center` to
-keep the image visually fixed. Derivation (keep `origin + R(rot)·(center−origin)`
-invariant): with `d = O′ − O`,
-`center′ = center + d − rotate(d, −rotationDeg)`.
-At rot=0 this is a no-op (center unchanged), as expected. Apply this in `setOrigin`
-**and** `nudgeOrigin` (both move the origin). After fixing, re-check #2 — it may be
-related. Add a regression check: set image rot=30°, setOrigin at a known world point,
-assert the image's rendered corner for a fixed plan point is unchanged.
+### 3. Origin-set on a rotated plan jumps the plan — ✅ DONE (2026-07-24)
+Fixed as diagnosed. `recenterImageForOrigin(image, O, O′)` in `store.ts` keeps
+`origin + R(rot)·(center−origin)` invariant via `center′ = center + d − rotate(d, −rot)`
+(`d = O′−O`; exact no-op at rot=0). Applied in `setOrigin`, `setOriginTo`, and
+`nudgeOrigin`. Regression-tested in-browser: 30° image, origin moved by click/drag/arrows
+→ rendered plan position drifts < 1e-15 m.
 
 ## Also worth doing eventually
 - Package as a Windows `.exe` (Electron) so the user drops the terminal entirely.

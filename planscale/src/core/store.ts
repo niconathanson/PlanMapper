@@ -32,6 +32,22 @@ export interface DrawDraft {
   cursor?: Vec2; // live cursor position (world meters), for rubber-band preview
 }
 
+// When the origin moves O -> O' and a rotated image exists, the image is drawn
+// pivoting about the origin (rendered = origin + R(rot)·(center − origin)), so
+// moving the origin would swing the plan. Adjust `center` to keep the plan
+// visually fixed: with d = O' − O, center' = center + d − rotate(d, −rot).
+// At rot=0 this is an exact no-op. Returns the (possibly updated) image.
+function recenterImageForOrigin(
+  image: PlanImage | null,
+  oldOrigin: Vec2,
+  newOrigin: Vec2,
+): PlanImage | null {
+  if (!image) return image;
+  const d = sub(newOrigin, oldOrigin);
+  const newCenter = add(image.center, sub(d, rotate(d, -image.rotationDeg)));
+  return { ...image, center: newCenter };
+}
+
 const PALETTE = [
   '#e6194b',
   '#3cb44b',
@@ -104,6 +120,7 @@ interface AppState {
   updateImage: (patch: Partial<PlanImage>) => void;
 
   setOrigin: (world: Vec2) => void;
+  setOriginTo: (world: Vec2) => void; // absolute origin move (drag) — coalesced undo
   setOriginRotation: (deg: number) => void;
   lockPlan: () => void;
   unlockPlan: () => void;
@@ -237,8 +254,14 @@ export const useStore = create<AppState>((set, get) => {
       withHistory((s) => ({ image: s.image ? { ...s.image, ...patch } : null })),
 
     // Placing the origin positions it but does not lock the plan; the user locks
-    // with Enter (or the Lock button).
-    setOrigin: (world) => withHistory(() => ({ origin: world })),
+    // with Enter (or the Lock button). Keep a rotated plan visually fixed as the
+    // origin (its rotation pivot) moves.
+    setOrigin: (world) =>
+      withHistory((s) => ({ origin: world, image: recenterImageForOrigin(s.image, s.origin, world) })),
+    // Absolute origin move used while dragging the origin dot: coalesce the burst
+    // into a single undo step (like arrow-nudge) and keep the plan fixed.
+    setOriginTo: (world) =>
+      withNudge((s) => ({ origin: world, image: recenterImageForOrigin(s.image, s.origin, world) })),
     setOriginRotation: (deg) => withHistory(() => ({ originRotationDeg: deg })),
     lockPlan: () => withHistory(() => ({ locked: true })),
     unlockPlan: () => withHistory(() => ({ locked: false })),
@@ -321,7 +344,10 @@ export const useStore = create<AppState>((set, get) => {
       }));
     },
     nudgeOrigin: (dx, dy) =>
-      withNudge((s) => ({ origin: { x: s.origin.x + dx, y: s.origin.y + dy } })),
+      withNudge((s) => {
+        const origin = { x: s.origin.x + dx, y: s.origin.y + dy };
+        return { origin, image: recenterImageForOrigin(s.image, s.origin, origin) };
+      }),
     endNudge: () => set({ nudging: false }),
     select: (id) => set({ selectedId: id }),
     nextColor: () => {

@@ -11,18 +11,18 @@ interface ToolDef {
 }
 
 const TOOLS: (ToolDef | 'sep')[] = [
-  { id: 'select', icon: 'select', label: 'Select', title: 'Select / move (V)' },
-  { id: 'pan', icon: 'pan', label: 'Pan', title: 'Pan view — or hold Space' },
+  { id: 'select', icon: 'select', label: 'Select', title: 'Select / move (S)' },
+  { id: 'pan', icon: 'pan', label: 'Pan', title: 'Pan view (P) — or hold Space / Shift' },
   'sep',
-  { id: 'origin', icon: 'origin', label: 'Origin', title: 'Set the 0,0 origin' },
-  { id: 'scale', icon: 'scale', label: 'Scale', title: 'Scale by two known points' },
+  { id: 'origin', icon: 'origin', label: 'Origin', title: 'Set the 0,0 origin (O)' },
+  { id: 'scale', icon: 'scale', label: 'Scale', title: 'Scale by two known points (C)' },
   'sep',
-  { id: 'probe', icon: 'probe', label: 'Point', title: 'Drop a coordinate point' },
-  { id: 'path', icon: 'path', label: 'Line', title: 'Multi-point line / cable run' },
-  { id: 'polygon', icon: 'polygon', label: 'Polygon', title: 'Trace a closed polygon' },
+  { id: 'probe', icon: 'probe', label: 'Point', title: 'Drop a coordinate point (D)' },
+  { id: 'path', icon: 'path', label: 'Line', title: 'Multi-point line / cable run (L)' },
+  { id: 'polygon', icon: 'polygon', label: 'Polygon', title: 'Trace a closed polygon (G)' },
   'sep',
-  { id: 'area', shape: 'rect', icon: 'rect', label: 'Rect', title: 'Rectangle area' },
-  { id: 'area', shape: 'fan', icon: 'fan', label: 'Fan', title: 'Fan / revolution area' },
+  { id: 'area', shape: 'rect', icon: 'rect', label: 'Rect', title: 'Rectangle area (R)' },
+  { id: 'area', shape: 'fan', icon: 'fan', label: 'Fan', title: 'Fan / revolution area (F)' },
 ];
 
 export function Toolbar() {

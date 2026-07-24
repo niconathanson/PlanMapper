@@ -41,9 +41,10 @@ export default function App() {
       visible: true,
     };
     setImage(img);
-    // Open in Pan mode so Select stays inert; the user positions the plan, sets
-    // the origin, then presses Enter to lock.
-    setTool('pan');
+    // Drop straight into Origin mode: the user clicks the plan feature that should
+    // read as 0,0 (drag the dot or arrow-nudge to fine-tune), then presses Enter to
+    // lock. Rotation and scale afterward both pivot on that fixed origin.
+    setTool('origin');
     setTimeout(() => requestFit(), 30);
   };
 
