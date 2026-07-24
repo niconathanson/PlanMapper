@@ -366,8 +366,8 @@ const STEPS: Step[] = [
             reopens exactly as you left it
           </li>
           <li>
-            <b>Export CSV</b> for a spreadsheet, <b>Export .txt (SV)</b> for
-            Vectorworks/Soundvision, or <b>Copy all coords</b> to paste anywhere
+            <b>Export CSV</b> for a spreadsheet, or <b>Copy all coords</b> to paste anywhere.{' '}
+            <b>Export .txt</b> is available in L'Acoustics Soundvision format
           </li>
         </ul>
         <p className="hint">

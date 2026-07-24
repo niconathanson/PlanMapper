@@ -44,7 +44,10 @@ File System Access API with download/`<input>` fallbacks, which work in the webv
 - **Build:** `npm run app:build` (= `tauri build`; runs `npm run build` first via
   `beforeBuildCommand`). Output: `src-tauri/target/release/planmapper.exe` (~8.7 MB,
   **portable single exe**, needs the WebView2 runtime that ships with Win10/11) and an
-  NSIS installer at `.../release/bundle/nsis/PlanMapper_0.1.0_x64-setup.exe`.
+  NSIS installer at `.../release/bundle/nsis/PlanMapper_<version>_x64-setup.exe`.
+  **Bump the version in three places together** — `package.json`, `src-tauri/Cargo.toml`
+  and `src-tauri/tauri.conf.json` (currently 0.2.0). Close any running `planmapper.exe`
+  first or the link step fails with "Access is denied".
 - **Requires Rust ≥ 1.85** (a transitive dep needs edition 2024). Plus MSVC C++ build
   tools (VS2022) — both already on the dev machine.
 - Key config in `src-tauri/tauri.conf.json`: `dragDropEnabled: false` (so the webview's
