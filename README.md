@@ -2,20 +2,20 @@
 
 **Turn a PDF or photo of a floor plan into a real-world measuring surface.** Scale it
 once against a known distance, set a 0,0 origin, then drop points, cable runs, polygons
-and coverage areas and read off exact coordinates, lengths and areas.
+and coverage areas and read off exact coordinates, lengths and areas. Fully 100% vibe-coded for your pleasure. Thanks Claude!
 
 ![PlanMapper with a venue plan scaled and marked up](docs/screenshots/01-overview.png)
 
 ## Why
 
 Event and production people routinely need to answer "how far is that, and where exactly
-is it?" from a venue drawing — cable runs, PA positions, audience coverage, stage
-dimensions. The usual workaround is to open an acoustic-simulation package and use it
+is it?" from a venue drawing: cable runs, PA positions, audience coverage, stage
+dimensions. The usual workaround is to open photoshop, vectorworks, sketchup or another acoustic sim tool that has image import, and use it
 off-label as a measuring tool, which is heavy, awkward, and full of features you don't
 want.
 
 PlanMapper does that one job. **It has no audio features and never will** — no
-prediction, no SPL, no speaker models. It measures plans and exports coordinates.
+prediction, no SPL, no speaker models. It measures plans and exports coordinates. 
 
 ## Download
 
@@ -26,7 +26,7 @@ Grab the latest build from the [**Releases**](../../releases/latest) page:
 | Windows 10/11 | `PlanMapper_<version>_x64-setup.exe` | SmartScreen warning → **More info** → **Run anyway** |
 | macOS (Apple Silicon + Intel) | `PlanMapper_<version>_universal.dmg` | **Right-click** the app → **Open** → **Open** |
 
-Both are unsigned — there's no paid code-signing certificate behind this — so each OS
+Both are unsigned. I am not paying for developer liscenses for these because these are tools for my personal use - first. So each OS
 shows a scary-looking warning the first time. That's the only thing it means. After the
 first launch, both open normally.
 
@@ -40,13 +40,13 @@ The whole workflow is four steps, and the app walks you through them on first ru
 **1 · Import** a PDF (any page) or an image — JPG, PNG, WebP. Drag it onto the canvas or
 use the Import button. No size limit, no compression.
 
-**2 · Set the origin.** Click the feature on the plan that should read 0,0 — stage
+**2 · Set the origin.** Click the feature on the plan that should read 0,0; stage
 centre, a survey mark, a building corner. Drag the origin dot or nudge it with the arrow
 keys to land it exactly, then press <kbd>Enter</kbd> to lock the plan to it. Every
 coordinate the app reports is measured from here, and both rotation and scaling pivot on
 it, so it never drifts.
 
-**3 · Scale by two points.** Click either end of a distance you know — a printed
+**3 · Scale by two points.** Click either end of a distance you know; a printed
 dimension, a stage width, a standard door — type the real distance, and the whole plan
 snaps to real-world size. Re-scaling later is safe: anything already drawn scales with
 the plan.
