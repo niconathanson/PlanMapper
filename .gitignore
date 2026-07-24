@@ -39,3 +39,14 @@ Thumbs.db
 
 # Reference screenshots of client work — kept locally, never published
 PDF-JPG samples/
+
+# Local-only working files. Kept on the dev machine, deliberately out of the
+# repo: icon source art (the generated icons the build uses live in
+# planscale/src-tauri/icons/), Soundvision round-trip test files, the legacy
+# dev-server launcher, and the note that ships beside the Mac download.
+planmapper-icons/
+SV import example.txt
+sv export text.txt
+Start PlanMapper.bat
+MAC_USERS_READ_ME_FIRST.txt
+planscale/README.md

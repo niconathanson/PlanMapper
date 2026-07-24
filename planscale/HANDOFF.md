@@ -3,8 +3,8 @@
 > Product name is **PlanMapper**; the app's working directory is still `planscale/`
 > internally (not renamed to avoid churn in dev tooling — invisible to users).
 
-Working notes for continuing development in a fresh session. Pairs with `README.md`
-(user-facing) and the Claude memory files.
+Working notes for continuing development in a fresh session. Pairs with the repo-root
+`README.md` (user-facing) and the Claude memory files.
 
 ## What this is
 
@@ -57,8 +57,12 @@ File System Access API with download/`<input>` fallbacks, which work in the webv
   `csp: null` (permissive — needed for data-URL images + the pdf.js worker), identifier
   `com.planmapper.desktop`. Cargo package is named `planmapper` so the exe is
   `planmapper.exe`. `vite.config.ts` uses relative `base: './'` for `build` only.
-- Icons in `src-tauri/icons/` are the default Tauri logos — rebrand later with
-  `npx tauri icon <png>`. Unsigned → Windows SmartScreen "More info → Run anyway".
+- Icons in `src-tauri/icons/` are the branded set and **are** what the build uses.
+  They were generated with `npx tauri icon <master.png>` from the source art in
+  `../planmapper-icons/`, which is gitignored (dev machine only) — restore or
+  re-point it if the icons ever need regenerating.
+- Unsigned → Windows SmartScreen "More info → Run anyway".
+
 ### macOS builds (done & verified 2026-07-24 on an Apple Silicon Mac)
 
 Same code, no source changes — must be built **on a Mac** (Rust + Xcode Command Line
