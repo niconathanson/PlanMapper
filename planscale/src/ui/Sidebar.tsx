@@ -84,9 +84,9 @@ function ImagePanel() {
         </button>
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
-        {s.originSet
+        {s.locked
           ? 'Plan is locked to the origin. Rotation and scale pivot on it. Unlock it under Origin to reposition.'
-          : 'Drag the plan to position it (Select tool). Set the origin on a known point, then scale — both lock and pivot there.'}
+          : 'Drag the plan to position it (Pan tool). Set the origin on a known point, then press Enter to lock. Rotation and scale pivot on the origin.'}
       </p>
     </div>
   );
@@ -139,21 +139,26 @@ function OriginPanel() {
     <div className="section">
       <h3>
         Origin (0,0)
-        {s.originSet && <span className="pill">plan locked</span>}
+        {s.locked && <span className="pill">plan locked</span>}
       </h3>
       <div className="btn-row" style={{ marginBottom: 8 }}>
         <button className={`tbtn ${active ? 'primary' : ''}`} onClick={() => s.setTool('origin')}>
-          {s.originSet ? 'Move origin' : 'Set origin (click plan)'}
+          Set origin (click plan)
         </button>
-        {s.originSet && (
-          <button className="tbtn" onClick={() => s.clearOrigin()} title="Clear origin and unlock the plan image">
-            Unlock
-          </button>
-        )}
+        {s.image &&
+          (s.locked ? (
+            <button className="tbtn" onClick={() => s.unlockPlan()} title="Unlock the plan image">
+              Unlock
+            </button>
+          ) : (
+            <button className="tbtn primary" onClick={() => s.lockPlan()} title="Lock the plan to the origin (Enter)">
+              Lock (Enter)
+            </button>
+          ))}
       </div>
       <p className="hint">
         All coordinates are measured from this point (positive Y is up). Scaling and
-        rotation pivot on it, and the plan image locks to it once set.
+        rotation pivot on it.
         {active ? ' Click the plan to place it, then nudge with the arrow keys.' : ''}
       </p>
     </div>

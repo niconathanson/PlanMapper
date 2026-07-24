@@ -1,19 +1,25 @@
 // Unit systems and length/coordinate formatting + parsing.
 // Canonical internal length unit is METERS. All stored geometry is in meters.
 
-export type UnitSystem = 'ft-in' | 'ft-dec' | 'm';
+// 'ft-in'  → feet + inches, e.g. 33' 6"          (label "ft & in")
+// 'ft.in'  → Soundvision-style feet.inch, e.g. 11.06 = 11' 6"
+// 'ft-dec' → decimal feet, e.g. 33.500 ft
+// 'm'      → meters
+export type UnitSystem = 'ft-in' | 'ft.in' | 'ft-dec' | 'm';
 
 export const M_PER_FT = 0.3048;
 export const FT_PER_M = 1 / M_PER_FT;
 
 export const UNIT_LABELS: Record<UnitSystem, string> = {
-  'ft-in': 'Feet + inches',
+  'ft-in': 'Feet & inches',
+  'ft.in': 'Soundvision (ft.in)',
   'ft-dec': 'Feet (decimal)',
   m: 'Meters',
 };
 
 export const UNIT_SHORT: Record<UnitSystem, string> = {
-  'ft-in': 'ft-in',
+  'ft-in': 'ft & in',
+  'ft.in': 'ft.in',
   'ft-dec': 'ft',
   m: 'm',
 };
@@ -42,9 +48,24 @@ function formatInches(inches: number, denom = 8): string {
   return whole === 0 ? `${n}/${d}"` : `${whole} ${n}/${d}"`;
 }
 
+// Soundvision-style feet.inch: 11' 6" -> "11.06". Inches are rounded to whole
+// inches and zero-padded to two digits (the L-Acoustics convention).
+function formatFtDotIn(meters: number): string {
+  const feet = meters * FT_PER_M;
+  const neg = feet < 0;
+  let ft = Math.floor(Math.abs(feet));
+  let inch = Math.round((Math.abs(feet) - ft) * 12);
+  if (inch >= 12) {
+    ft += 1;
+    inch = 0;
+  }
+  return `${neg ? '-' : ''}${ft}.${inch < 10 ? '0' : ''}${inch}`;
+}
+
 // Format a length (meters) as a display string in the given unit system.
 export function formatLength(meters: number, units: UnitSystem, decimals = 3): string {
   if (units === 'm') return `${meters.toFixed(decimals)} m`;
+  if (units === 'ft.in') return formatFtDotIn(meters);
   const feet = meters * FT_PER_M;
   if (units === 'ft-dec') return `${feet.toFixed(decimals)} ft`;
   // ft-in
@@ -105,6 +126,16 @@ export function parseLength(input: string, units: UnitSystem): number | null {
   // feet-and-inches forms, e.g. 33'6", 33' 6 1/2", 33', 6"
   if (s.includes("'") || s.includes('"')) {
     return parseFeetInches(s);
+  }
+
+  // Soundvision ft.in: the two digits after the point are inches (11.06 = 11'6")
+  if (units === 'ft.in') {
+    const v = parseFloat(s);
+    if (isNaN(v)) return null;
+    const abs = Math.abs(v);
+    const ft = Math.floor(abs);
+    const inch = Math.round((abs - ft) * 100);
+    return Math.sign(v || 1) * (ft + inch / 12) * M_PER_FT;
   }
 
   // bare number: interpret per active unit system

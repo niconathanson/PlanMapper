@@ -8,12 +8,14 @@ import type {
   Vec2,
 } from './types';
 import type { UnitSystem } from './units';
+import { M_PER_FT } from './units';
 import { rotate, sub, add, scale as scaleVec } from './geometry';
 
 export interface ViewState {
   scale: number; // Konva stage zoom
   x: number; // Konva stage position (screen px)
   y: number;
+  rot: number; // view rotation (degrees) — purely graphical, coordinates unchanged
 }
 
 // Transient state for the active two-point scaling workflow.
@@ -47,7 +49,7 @@ interface HistorySnapshot {
   image: PlanImage | null;
   origin: Vec2;
   originRotationDeg: number;
-  originSet: boolean;
+  locked: boolean;
   objects: SceneObject[];
 }
 
@@ -57,7 +59,7 @@ interface AppState {
   image: PlanImage | null;
   origin: Vec2; // world meters that reads as (0,0)
   originRotationDeg: number;
-  originSet: boolean; // true once the user has explicitly placed the origin
+  locked: boolean; // plan image is locked to the origin (Enter to lock)
   objects: SceneObject[];
 
   // --- appearance ---
@@ -67,8 +69,12 @@ interface AppState {
   tool: ToolId;
   selectedId: string | null;
   view: ViewState;
-  angleSnap: boolean;
+  angleStep: number; // 0 = no angle snap; else snap segments to this degree step
   snapVertices: boolean;
+  gridSnap: boolean; // snap drawn points/rects to snapStep intervals
+  snapStep: number; // grid snap interval (meters)
+  nudgeFine: number; // arrow-key nudge (meters)
+  nudgeCoarse: number; // shift+arrow nudge (meters)
   gridVisible: boolean;
   scaleDraft: ScaleDraft | null;
   draft: DrawDraft | null;
@@ -86,8 +92,11 @@ interface AppState {
   setTool: (t: ToolId) => void;
   setView: (v: ViewState) => void;
   requestFit: () => void;
-  toggleAngleSnap: () => void;
+  setAngleStep: (deg: number) => void;
   toggleSnapVertices: () => void;
+  setGridSnap: (on: boolean) => void;
+  setSnapStep: (meters: number) => void;
+  setNudge: (fine: number, coarse: number) => void;
   toggleGrid: () => void;
 
   setImage: (img: PlanImage | null) => void;
@@ -95,7 +104,8 @@ interface AppState {
 
   setOrigin: (world: Vec2) => void;
   setOriginRotation: (deg: number) => void;
-  clearOrigin: () => void;
+  lockPlan: () => void;
+  unlockPlan: () => void;
 
   beginScale: () => void;
   setScalePoint: (which: 'a' | 'b', world: Vec2) => void;
@@ -144,7 +154,7 @@ const snapshot = (s: AppState): HistorySnapshot => ({
   image: s.image,
   origin: s.origin,
   originRotationDeg: s.originRotationDeg,
-  originSet: s.originSet,
+  locked: s.locked,
   objects: s.objects,
 });
 
@@ -169,15 +179,19 @@ export const useStore = create<AppState>((set, get) => {
     image: null,
     origin: { x: 0, y: 0 },
     originRotationDeg: 0,
-    originSet: false,
+    locked: false,
     objects: [],
     theme: initialTheme(),
 
     tool: 'select',
     selectedId: null,
-    view: { scale: 1, x: 0, y: 0 },
-    angleSnap: false,
+    view: { scale: 1, x: 0, y: 0, rot: 0 },
+    angleStep: 45, // 45° snap on by default
     snapVertices: true,
+    gridSnap: true, // snap to grid intervals by default
+    snapStep: 6 * (M_PER_FT / 12), // 6 inches
+    nudgeFine: M_PER_FT / 12, // 1 inch
+    nudgeCoarse: M_PER_FT, // 1 foot
     gridVisible: false,
     scaleDraft: null,
     draft: null,
@@ -192,23 +206,23 @@ export const useStore = create<AppState>((set, get) => {
     setTool: (t) => set({ tool: t, draft: null, scaleDraft: null }),
     setView: (v) => set({ view: v }),
     requestFit: () => set((s) => ({ fitVersion: s.fitVersion + 1 })),
-    toggleAngleSnap: () => set((s) => ({ angleSnap: !s.angleSnap })),
+    setAngleStep: (deg) => set({ angleStep: deg }),
     toggleSnapVertices: () => set((s) => ({ snapVertices: !s.snapVertices })),
+    setGridSnap: (on) => set({ gridSnap: on }),
+    setSnapStep: (meters) => set({ snapStep: Math.max(1e-4, meters) }),
+    setNudge: (fine, coarse) => set({ nudgeFine: Math.max(1e-4, fine), nudgeCoarse: Math.max(1e-4, coarse) }),
     toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
 
     setImage: (img) => withHistory(() => ({ image: img })),
     updateImage: (patch) =>
       withHistory((s) => ({ image: s.image ? { ...s.image, ...patch } : null })),
 
-    setOrigin: (world) => withHistory(() => ({ origin: world, originSet: true })),
+    // Placing the origin positions it but does not lock the plan; the user locks
+    // with Enter (or the Lock button).
+    setOrigin: (world) => withHistory(() => ({ origin: world })),
     setOriginRotation: (deg) => withHistory(() => ({ originRotationDeg: deg })),
-    // Clear the origin: unlock the image and move the origin back to the image
-    // centre (or world 0,0 if no image).
-    clearOrigin: () =>
-      withHistory((s) => ({
-        origin: s.image ? { ...s.image.center } : { x: 0, y: 0 },
-        originSet: false,
-      })),
+    lockPlan: () => withHistory(() => ({ locked: true })),
+    unlockPlan: () => withHistory(() => ({ locked: false })),
 
     beginScale: () => set({ tool: 'scale', scaleDraft: {} }),
     setScalePoint: (which, world) =>
@@ -314,7 +328,7 @@ export const useStore = create<AppState>((set, get) => {
         image: data.image,
         origin: data.origin,
         originRotationDeg: data.originRotationDeg ?? 0,
-        originSet: data.originSet ?? true,
+        locked: data.locked ?? true,
         objects: data.objects,
         selectedId: null,
         tool: 'select',
@@ -332,7 +346,7 @@ export const useStore = create<AppState>((set, get) => {
         image: s.image,
         origin: s.origin,
         originRotationDeg: s.originRotationDeg,
-        originSet: s.originSet,
+        locked: s.locked,
         objects: s.objects,
       };
     },
@@ -341,7 +355,7 @@ export const useStore = create<AppState>((set, get) => {
         image: null,
         origin: { x: 0, y: 0 },
         originRotationDeg: 0,
-        originSet: false,
+        locked: false,
         objects: [],
         selectedId: null,
         tool: 'select',

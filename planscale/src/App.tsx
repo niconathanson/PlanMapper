@@ -13,6 +13,7 @@ import type { PlanImage } from './core/types';
 export default function App() {
   const setImage = useStore((s) => s.setImage);
   const requestFit = useStore((s) => s.requestFit);
+  const setTool = useStore((s) => s.setTool);
   const theme = useStore((s) => s.theme);
 
   // Reflect the theme onto the document root so CSS variables switch.
@@ -40,6 +41,9 @@ export default function App() {
       visible: true,
     };
     setImage(img);
+    // Open in Pan mode so Select stays inert; the user positions the plan, sets
+    // the origin, then presses Enter to lock.
+    setTool('pan');
     setTimeout(() => requestFit(), 30);
   };
 

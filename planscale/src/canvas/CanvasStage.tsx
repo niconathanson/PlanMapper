@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Stage, Layer, Rect } from 'react-konva';
 import type Konva from 'konva';
 import { useStore, makeArea, makeRectFromBounds } from '../core/store';
-import { PX_PER_M, snapAngle, dist } from '../core/geometry';
+import type { ViewState } from '../core/store';
+import { PX_PER_M, snapAngle, snapToGrid, dist, rotate } from '../core/geometry';
 import { M_PER_FT } from '../core/units';
 import type { Vec2, SceneObject } from '../core/types';
 import { PlanImageNode } from './PlanImageNode';
@@ -15,6 +16,17 @@ import { Icon } from '../ui/icons';
 const MIN_SCALE = 0.02;
 const MAX_SCALE = 40;
 const SNAP_PX = 12; // vertex-snap screen threshold
+
+// Screen <-> stage-logical conversion accounting for the view rotation.
+// Stage transform is: screen = view.pos + R(rot) · (scale · logical).
+function screenToLogical(p: Vec2, view: ViewState): Vec2 {
+  const t = rotate({ x: p.x - view.x, y: p.y - view.y }, -view.rot);
+  return { x: t.x / view.scale, y: t.y / view.scale };
+}
+function logicalToScreen(l: Vec2, view: ViewState): Vec2 {
+  const r = rotate({ x: l.x * view.scale, y: l.y * view.scale }, view.rot);
+  return { x: r.x + view.x, y: r.y + view.y };
+}
 
 export function CanvasStage({
   onImport,
@@ -90,7 +102,7 @@ export function CanvasStage({
     }
     if (!isFinite(minX)) {
       // nothing to fit: center on origin at 1:1-ish
-      s.setView({ scale: 1, x: size.w / 2, y: size.h / 2 });
+      s.setView({ scale: 1, x: size.w / 2, y: size.h / 2, rot: 0 });
       return;
     }
     const wStage = (maxX - minX) * PX_PER_M || 1;
@@ -102,7 +114,8 @@ export function CanvasStage({
     );
     const cx = ((minX + maxX) / 2) * PX_PER_M;
     const cy = ((minY + maxY) / 2) * PX_PER_M;
-    s.setView({ scale, x: size.w / 2 - cx * scale, y: size.h / 2 - cy * scale });
+    // Fit also resets the view rotation to upright.
+    s.setView({ scale, x: size.w / 2 - cx * scale, y: size.h / 2 - cy * scale, rot: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.fitVersion]);
 
@@ -126,10 +139,11 @@ export function CanvasStage({
     return t;
   }, [s.objects, s.draft]);
 
-  // Apply vertex snap then angle snap to a raw world point during drawing.
+  // Snap a raw world point during drawing: existing vertex (highest priority),
+  // then angle snap (direction), then grid snap (interval).
   const applySnaps = useCallback(
     (raw: Vec2): Vec2 => {
-      // vertex snap (screen-space threshold)
+      // vertex snap (screen-space threshold) — exact, wins over the others
       if (s.snapVertices) {
         const thr = SNAP_PX / (PX_PER_M * view.scale);
         let best: Vec2 | null = null;
@@ -143,13 +157,22 @@ export function CanvasStage({
         }
         if (best) return best;
       }
+      let p = raw;
       // angle snap relative to last committed point
-      if (s.angleSnap && s.draft && s.draft.pts.length > 0) {
-        return snapAngle(s.draft.pts[s.draft.pts.length - 1], raw, 45);
+      if (s.angleStep > 0 && s.draft && s.draft.pts.length > 0) {
+        p = snapAngle(s.draft.pts[s.draft.pts.length - 1], p, s.angleStep);
       }
-      return raw;
+      // grid snap to the configured interval
+      if (s.gridSnap) p = snapToGrid(p, s.origin, s.snapStep);
+      return p;
     },
-    [s.snapVertices, s.angleSnap, s.draft, snapTargets, view.scale],
+    [s.snapVertices, s.angleStep, s.gridSnap, s.snapStep, s.origin, s.draft, snapTargets, view.scale],
+  );
+
+  // Grid-snap a point only (for rectangle drag corners).
+  const gridSnap = useCallback(
+    (raw: Vec2): Vec2 => (s.gridSnap ? snapToGrid(raw, s.origin, s.snapStep) : raw),
+    [s.gridSnap, s.origin, s.snapStep],
   );
 
   // ---- wheel zoom (to cursor) ----
@@ -159,20 +182,24 @@ export function CanvasStage({
     if (!stage) return;
     const pointer = stage.getPointerPosition();
     if (!pointer) return;
-    const oldScale = view.scale;
-    const worldPoint = {
-      x: (pointer.x - view.x) / oldScale,
-      y: (pointer.y - view.y) / oldScale,
-    };
+    const logical = screenToLogical(pointer, view); // fixed point under cursor
     const dir = e.evt.deltaY > 0 ? 1 : -1;
     const factor = 1.12;
-    let newScale = dir > 0 ? oldScale / factor : oldScale * factor;
+    let newScale = dir > 0 ? view.scale / factor : view.scale * factor;
     newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-    s.setView({
-      scale: newScale,
-      x: pointer.x - worldPoint.x * newScale,
-      y: pointer.y - worldPoint.y * newScale,
-    });
+    const nv = { ...view, scale: newScale };
+    const back = logicalToScreen(logical, nv);
+    s.setView({ ...nv, x: view.x + (pointer.x - back.x), y: view.y + (pointer.y - back.y) });
+  };
+
+  // Rotate the whole view about the viewport centre (graphical only — all
+  // coordinates are unchanged).
+  const setViewRot = (rotDeg: number) => {
+    const center = { x: size.w / 2, y: size.h / 2 };
+    const logical = screenToLogical(center, view);
+    const nv = { ...view, rot: rotDeg };
+    const back = logicalToScreen(logical, nv);
+    s.setView({ ...nv, x: view.x + (center.x - back.x), y: view.y + (center.y - back.y) });
   };
 
   const panning = spaceHeld || s.tool === 'pan';
@@ -266,7 +293,8 @@ export function CanvasStage({
     if (panning || !isRectTool) return;
     const raw = pointerWorld();
     if (!raw) return;
-    setAreaDrag({ start: raw, cur: raw });
+    const p = gridSnap(raw);
+    setAreaDrag({ start: p, cur: p });
   };
 
   const onMouseUp = () => {
@@ -311,14 +339,17 @@ export function CanvasStage({
         s.units,
       );
     }
-    if (areaDrag) setAreaDrag((d) => (d ? { start: d.start, cur: raw } : d));
+    if (areaDrag) {
+      const p = gridSnap(raw);
+      setAreaDrag((d) => (d ? { start: d.start, cur: p } : d));
+    }
     if (s.draft) s.setDraftCursor(applySnaps(raw));
   };
 
   const onStageDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target !== e.target.getStage()) return;
     const stage = e.target as Konva.Stage;
-    s.setView({ scale: view.scale, x: stage.x(), y: stage.y() });
+    s.setView({ ...view, x: stage.x(), y: stage.y() });
   };
 
   // ---- keyboard ----
@@ -342,14 +373,15 @@ export function CanvasStage({
       if (ARROWS[e.key] && (s.selectedId || s.tool === 'origin')) {
         e.preventDefault();
         const [ux, uy] = ARROWS[e.key];
-        // fine step = 1 in (or 1 cm); coarse (Shift) = 1 ft (or 0.1 m)
-        const step = s.units === 'm' ? (e.shiftKey ? 0.1 : 0.01) : e.shiftKey ? M_PER_FT : M_PER_FT / 12;
+        const step = e.shiftKey ? s.nudgeCoarse : s.nudgeFine;
         if (s.selectedId) s.nudgeSelected(ux * step, uy * step);
         else s.nudgeOrigin(ux * step, uy * step);
         return;
       }
       if (e.key === 'Enter' && s.draft) {
         s.commitDraft();
+      } else if (e.key === 'Enter' && s.image && !s.locked) {
+        s.lockPlan(); // lock the plan to the origin
       } else if (e.key === 'Escape') {
         if (s.draft) s.cancelDraft();
         else if (s.scaleDraft) s.cancelScale();
@@ -381,12 +413,12 @@ export function CanvasStage({
   }, [s]);
 
   const zoomAtCenter = (factor: number) => {
-    const oldScale = view.scale;
-    const cx = size.w / 2;
-    const cy = size.h / 2;
-    const wp = { x: (cx - view.x) / oldScale, y: (cy - view.y) / oldScale };
-    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, oldScale * factor));
-    s.setView({ scale: newScale, x: cx - wp.x * newScale, y: cy - wp.y * newScale });
+    const center = { x: size.w / 2, y: size.h / 2 };
+    const logical = screenToLogical(center, view);
+    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, view.scale * factor));
+    const nv = { ...view, scale: newScale };
+    const back = logicalToScreen(logical, nv);
+    s.setView({ ...nv, x: view.x + (center.x - back.x), y: view.y + (center.y - back.y) });
   };
 
   const TOOL_HINT: Partial<Record<string, string>> = {
@@ -424,6 +456,7 @@ export function CanvasStage({
         height={size.h}
         scaleX={view.scale}
         scaleY={view.scale}
+        rotation={view.rot}
         x={view.x}
         y={view.y}
         draggable={stageDraggable}
@@ -446,7 +479,7 @@ export function CanvasStage({
             <PlanImageNode
               image={s.image}
               origin={s.origin}
-              draggable={s.tool === 'select' && !panning && !s.originSet}
+              draggable={s.tool === 'pan' && !spaceHeld && !s.locked}
               onDragEnd={(c) => s.updateImage({ center: c })}
             />
           )}
@@ -514,6 +547,21 @@ export function CanvasStage({
       </div>
 
       <div className="zoombar">
+        <button onClick={() => setViewRot(view.rot - 15)} title="Rotate view left 15°">
+          ⟲
+        </button>
+        <button onClick={() => setViewRot(view.rot + 15)} title="Rotate view right 15°">
+          ⟳
+        </button>
+        {view.rot !== 0 && (
+          <button
+            onClick={() => setViewRot(0)}
+            title="Reset view rotation to upright"
+            style={{ width: 'auto', padding: '0 8px' }}
+          >
+            {Math.round(((view.rot % 360) + 360) % 360)}°
+          </button>
+        )}
         <button onClick={() => zoomAtCenter(1 / 1.2)} title="Zoom out">
           −
         </button>

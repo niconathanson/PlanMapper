@@ -1,5 +1,8 @@
-// Minimal inline stroke icons (20x20, currentColor).
+// Minimal inline stroke icons (20x20, currentColor). Explicit width/height so
+// they render at a sensible size even where no CSS sizes them (e.g. the top bar).
 const S = {
+  width: 18,
+  height: 18,
   fill: 'none',
   stroke: 'currentColor',
   strokeWidth: 1.7,

@@ -1,10 +1,12 @@
 import { useStore } from '../core/store';
 import { Icon } from './icons';
 import { saveProject, openProject } from '../core/project';
+import { SnappingMenu } from './SnappingMenu';
 import type { UnitSystem } from '../core/units';
 
 const UNIT_OPTS: { id: UnitSystem; label: string }[] = [
-  { id: 'ft-in', label: `ft-in` },
+  { id: 'ft-in', label: `ft & in` },
+  { id: 'ft.in', label: `ft.in` },
   { id: 'ft-dec', label: `ft` },
   { id: 'm', label: `m` },
 ];
@@ -69,12 +71,7 @@ export function TopBar({ onImport }: { onImport: () => void }) {
         ))}
       </div>
 
-      <button className={`tbtn ${s.angleSnap ? 'primary' : ''}`} onClick={s.toggleAngleSnap} title="Snap segments to 45°/90°">
-        45°
-      </button>
-      <button className={`tbtn ${s.snapVertices ? 'primary' : ''}`} onClick={s.toggleSnapVertices} title="Snap to existing points">
-        ⊹
-      </button>
+      <SnappingMenu />
       <button className={`tbtn ${s.gridVisible ? 'primary' : ''}`} onClick={s.toggleGrid} title="Toggle grid">
         #
       </button>

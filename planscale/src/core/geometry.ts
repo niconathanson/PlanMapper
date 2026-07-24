@@ -76,6 +76,16 @@ export function snapAngle(prev: Vec2, p: Vec2, stepDeg = 45): Vec2 {
   return { x: prev.x + Math.cos(snapped) * len, y: prev.y + Math.sin(snapped) * len };
 }
 
+// Snap a point to a grid of `step` meters, aligned to the origin so snapped
+// coordinates land on clean multiples of the interval relative to (0,0).
+export function snapToGrid(p: Vec2, origin: Vec2, step: number): Vec2 {
+  if (step <= 0) return p;
+  return {
+    x: origin.x + Math.round((p.x - origin.x) / step) * step,
+    y: origin.y + Math.round((p.y - origin.y) / step) * step,
+  };
+}
+
 // ---- Measurements ----
 
 export function pathLength(pts: Vec2[]): number {

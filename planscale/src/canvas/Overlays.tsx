@@ -20,13 +20,17 @@ interface VisBounds {
   maxY: number;
 } // stage units
 
+// Logical bounds of the visible viewport, accounting for view rotation (the
+// visible region is a rotated rectangle, so we bound its four screen corners).
 function visibleStageBounds(view: ViewState, w: number, h: number): VisBounds {
-  return {
-    minX: -view.x / view.scale,
-    minY: -view.y / view.scale,
-    maxX: (w - view.x) / view.scale,
-    maxY: (h - view.y) / view.scale,
+  const toLogical = (px: number, py: number): Vec2 => {
+    const t = rotate({ x: px - view.x, y: py - view.y }, -view.rot);
+    return { x: t.x / view.scale, y: t.y / view.scale };
   };
+  const corners = [toLogical(0, 0), toLogical(w, 0), toLogical(w, h), toLogical(0, h)];
+  const xs = corners.map((c) => c.x);
+  const ys = corners.map((c) => c.y);
+  return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
 }
 
 export function Grid({
