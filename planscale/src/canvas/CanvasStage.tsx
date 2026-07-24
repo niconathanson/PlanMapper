@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Stage, Layer, Rect } from 'react-konva';
 import type Konva from 'konva';
-import { useStore, makeArea, makeRectFromBounds } from '../core/store';
+import { useStore, makeArea, makeRectFromBounds, makeFanFromBounds } from '../core/store';
 import type { ViewState } from '../core/store';
 import { PX_PER_M, snapAngle, snapToGrid, dist, rotate } from '../core/geometry';
 import { M_PER_FT } from '../core/units';
@@ -75,8 +75,10 @@ export function CanvasStage({
   const [ctrlHeld, setCtrlHeld] = useState(false); // temporarily disable snapping
   const [dragOver, setDragOver] = useState(false);
   const [showKeys, setShowKeys] = useState(true);
-  // Drag-to-size state for the rectangle area tool (world meters).
-  const [areaDrag, setAreaDrag] = useState<{ start: Vec2; cur: Vec2 } | null>(null);
+  // Drag-to-size state for the area tools (rect + fan), world meters.
+  const [areaDrag, setAreaDrag] = useState<{ start: Vec2; cur: Vec2; shape: 'rect' | 'fan' } | null>(
+    null,
+  );
 
   const defaultAreaBase = () => (s.units === 'm' ? 3 : 10 * M_PER_FT); // 3 m or 10 ft
 
@@ -276,16 +278,10 @@ export function CanvasStage({
         else if (!s.scaleDraft?.b) s.setScalePoint('b', raw);
         break;
       }
-      case 'area': {
-        // Fan areas are click-to-place with a default size. Rectangles are
-        // handled by mousedown/up (drag-to-size, or click for a default).
-        if ((s.draft?.shape ?? 'rect') === 'fan') {
-          const area = makeArea('fan', raw, s.nextColor(), defaultAreaBase());
-          s.addObject(area);
-          s.setTool('select');
-        }
+      case 'area':
+        // Both rect and fan are drag-to-size, handled by mousedown/up (or a
+        // click for a default-sized one). Nothing to do on a plain click here.
         break;
-      }
       case 'polygon':
       case 'path': {
         const p = applySnaps(raw);
@@ -322,36 +318,40 @@ export function CanvasStage({
     }
   };
 
-  // Rectangle drag-to-size: press starts a drag box, release finalizes it.
-  const isRectTool = s.tool === 'area' && (s.draft?.shape ?? 'rect') === 'rect';
+  // Area drag-to-size (rect + fan): press starts a drag box, release finalizes it.
+  const areaShape: 'rect' | 'fan' | null = s.tool === 'area' ? s.draft?.shape ?? 'rect' : null;
 
   const onMouseDown = () => {
-    if (panning || !isRectTool) return;
+    if (panning || !areaShape) return;
     const raw = pointerWorld();
     if (!raw) return;
     const p = gridSnap(raw);
-    setAreaDrag({ start: p, cur: p });
+    setAreaDrag({ start: p, cur: p, shape: areaShape });
   };
 
   const onMouseUp = () => {
     if (!areaDrag) return;
-    const { start, cur } = areaDrag;
+    const { start, cur, shape } = areaDrag;
     setAreaDrag(null);
     const color = s.nextColor();
     const draggedPx = Math.hypot(cur.x - start.x, cur.y - start.y) * PX_PER_M * view.scale;
     if (draggedPx > 6) {
-      // real drag → rectangle covering the box
-      const area = makeRectFromBounds(
+      // real drag → area covering the box (fan starts straight-sided, then the
+      // user pulls its far/near widths into a trapezoid)
+      const [minX, minY, maxX, maxY] = [
         Math.min(start.x, cur.x),
         Math.min(start.y, cur.y),
         Math.max(start.x, cur.x),
         Math.max(start.y, cur.y),
-        color,
-      );
+      ];
+      const area =
+        shape === 'fan'
+          ? makeFanFromBounds(minX, minY, maxX, maxY, color)
+          : makeRectFromBounds(minX, minY, maxX, maxY, color);
       s.addObject(area);
     } else {
-      // just a click → default-sized rectangle at the point
-      s.addObject(makeArea('rect', start, color, defaultAreaBase()));
+      // just a click → default-sized area at the point
+      s.addObject(makeArea(shape, start, color, defaultAreaBase()));
     }
     s.setTool('select');
   };
@@ -377,7 +377,7 @@ export function CanvasStage({
     }
     if (areaDrag) {
       const p = gridSnap(raw);
-      setAreaDrag((d) => (d ? { start: d.start, cur: p } : d));
+      setAreaDrag((d) => (d ? { ...d, cur: p } : d));
     }
     if (s.draft) s.setDraftCursor(applySnaps(raw));
   };
@@ -496,7 +496,7 @@ export function CanvasStage({
     probe: 'Click to drop coordinate points',
     polygon: 'Click to add vertices · click the first point or double-click to close',
     path: 'Click to add points · double-click or Enter to finish',
-    area: 'Click to place the area, then edit its size on the right',
+    area: 'Drag to size the area · then adjust widths on the right',
   };
   const polyDrawHint =
     (s.tool === 'polygon' || s.tool === 'path') && ctrlHeld ? ' · snapping off (Ctrl)' : '';

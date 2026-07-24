@@ -1,9 +1,16 @@
 import { useStore } from '../core/store';
 import { LengthField, NumField } from './NumberField';
-import { toDisplay, fromDisplay, pathLength, polygonArea, polygonPerimeter, segmentLengths } from '../core/geometry';
+import { toDisplay, fromDisplay, pathLength, polygonArea, polygonPerimeter, segmentLengths, areaOutline } from '../core/geometry';
 import type { OriginFrame } from '../core/geometry';
 import { fmtLen, fmtArea } from '../core/readout';
-import { objectsToCsv, exportCsv, copyToClipboard, objectSummary } from '../core/project';
+import {
+  objectsToCsv,
+  exportCsv,
+  copyToClipboard,
+  objectSummary,
+  objectsToVectorworks,
+  exportVectorworks,
+} from '../core/project';
 import type { AreaObj, PathObj, PolygonObj, ProbePoint, SceneObject, Vec2 } from '../core/types';
 
 export function Sidebar({ onImport }: { onImport: () => void }) {
@@ -300,10 +307,33 @@ function AreaEditor({ obj, frame }: { obj: AreaObj; frame: OriginFrame }) {
             <label>Width far</label>
             <LengthField meters={obj.wFar} units={s.units} onCommit={(m) => patch({ wFar: m })} />
           </div>
+          <div className="field">
+            <label>Round far</label>
+            <NumField
+              value={obj.arcSteps ?? 1}
+              step={1}
+              min={1}
+              live
+              onCommit={(v) => patch({ arcSteps: Math.max(1, Math.round(v)) })}
+              suffix="seg"
+            />
+          </div>
+          <div className="field">
+            <label>Round near</label>
+            <NumField
+              value={obj.nearArcSteps ?? 1}
+              step={1}
+              min={1}
+              live
+              onCommit={(v) => patch({ nearArcSteps: Math.max(1, Math.round(v)) })}
+              suffix="seg"
+            />
+          </div>
+          <p className="hint">1 seg = straight edge. Rounding needs the far edge wider than the near.</p>
         </>
       )}
       <div className="readout" style={{ marginTop: 8 }}>
-        {`Area: ${fmtArea(((obj.wNear + obj.wFar) / 2) * obj.length, s.units)}`}
+        {`Area: ${fmtArea(polygonArea(areaOutline(obj)), s.units)}`}
       </div>
     </>
   );
@@ -358,7 +388,9 @@ function ObjectListPanel({ frame }: { frame: OriginFrame }) {
 
 function ExportPanel({ frame }: { frame: OriginFrame }) {
   const s = useStore();
-  const csv = () => exportCsv(objectsToCsv(s.objects, frame, s.units), s.image?.name?.replace(/\.[^.]+$/, '') || 'coordinates');
+  const base = s.image?.name?.replace(/\.[^.]+$/, '') || 'planscale';
+  const csv = () => exportCsv(objectsToCsv(s.objects, frame, s.units), base);
+  const vw = () => exportVectorworks(objectsToVectorworks(s.objects, frame), base);
   const copyAll = () =>
     copyToClipboard(s.objects.map((o) => objectSummary(o, frame, s.units)).join('\n\n'));
   return (
@@ -367,6 +399,9 @@ function ExportPanel({ frame }: { frame: OriginFrame }) {
       <div className="btn-row">
         <button className="tbtn" onClick={csv}>
           Export CSV
+        </button>
+        <button className="tbtn" onClick={vw} title="Vertices as a Vectorworks / Soundvision .txt (meters)">
+          Export .txt (SV)
         </button>
         <button className="tbtn" onClick={copyAll}>
           Copy all coords

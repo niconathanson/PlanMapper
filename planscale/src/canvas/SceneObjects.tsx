@@ -1,6 +1,6 @@
 import { Line, Circle, Group, Label, Tag, Text } from 'react-konva';
 import type Konva from 'konva';
-import { PX_PER_M, areaCorners, areaCenter, rotate, sub } from '../core/geometry';
+import { PX_PER_M, areaCorners, areaOutline, areaCenter, rotate, sub } from '../core/geometry';
 import { fmtLen, fmtArea, fmtCoord } from '../core/readout';
 import {
   polygonArea,
@@ -186,8 +186,8 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
   }
 
   // area
-  const corners = areaCorners(obj);
-  const flat = corners.flatMap(toStage);
+  const corners = areaCorners(obj); // 4 drag handles (trapezoid corners)
+  const flat = areaOutline(obj).flatMap(toStage); // drawn outline (fan far edge may be arced)
   const c = areaCenter(obj);
   const label =
     obj.shape === 'rect'
@@ -219,13 +219,31 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
         wFar: width,
       } as Partial<SceneObject>);
     } else {
-      // Fan: keep the symmetric trapezoid. Near corners set wNear; far corners
-      // set length + wFar (the opposite edge stays put).
+      // Fan: symmetric trapezoid. The dragged corner's cross-axis distance sets
+      // that edge's half-width, and its along-axis position moves that edge while
+      // the OPPOSITE edge stays put (so either edge can lengthen the fan).
       const local = rotate(sub(world, obj.origin), -obj.rotationDeg);
       const half = Math.max(0.025, Math.abs(local.y));
       if (i === 0 || i === 1) {
-        ctx.onUpdate(obj.id, { wNear: 2 * half } as Partial<SceneObject>);
+        // Near corners: move the near edge along the axis (far edge fixed). local.x
+        // can go negative to lengthen backward past the original near edge.
+        const length = Math.max(0.05, obj.length - local.x);
+        const shift = obj.length - length; // distance the near edge advanced along +x
+        ctx.onUpdate(obj.id, {
+          origin: { x: obj.origin.x + u.x * shift, y: obj.origin.y + u.y * shift },
+          length,
+          wNear: 2 * half,
+        } as Partial<SceneObject>);
+      } else if (local.x < 0) {
+        // Far corner dragged back through the origin → flip the fan to point the
+        // other way (rotate 180° about the near edge / origin).
+        ctx.onUpdate(obj.id, {
+          rotationDeg: obj.rotationDeg + 180,
+          length: Math.max(0.05, -local.x),
+          wFar: 2 * half,
+        } as Partial<SceneObject>);
       } else {
+        // Far corners: set length + far width; near edge (origin) stays put.
         ctx.onUpdate(obj.id, {
           length: Math.max(0.05, local.x),
           wFar: 2 * half,

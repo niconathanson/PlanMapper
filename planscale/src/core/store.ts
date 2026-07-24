@@ -9,7 +9,7 @@ import type {
 } from './types';
 import type { UnitSystem } from './units';
 import { M_PER_FT } from './units';
-import { rotate, sub, add, scale as scaleVec } from './geometry';
+import { rotate, sub, add, scale as scaleVec, PX_PER_M } from './geometry';
 
 export interface ViewState {
   scale: number; // Konva stage zoom
@@ -46,6 +46,15 @@ function recenterImageForOrigin(
   const d = sub(newOrigin, oldOrigin);
   const newCenter = add(image.center, sub(d, rotate(d, -image.rotationDeg)));
   return { ...image, center: newCenter };
+}
+
+// Scale one object about a pivot (world meters) by `f`. Used when re-scaling the
+// plan so already-placed geometry stays glued to its plan features.
+function scaleObjectAbout(obj: SceneObject, o: Vec2, f: number): SceneObject {
+  const sp = (p: Vec2): Vec2 => ({ x: o.x + (p.x - o.x) * f, y: o.y + (p.y - o.y) * f });
+  if (obj.type === 'probe') return { ...obj, p: sp(obj.p) };
+  if (obj.type === 'polygon' || obj.type === 'path') return { ...obj, pts: obj.pts.map(sp) };
+  return { ...obj, origin: sp(obj.origin), length: obj.length * f, wNear: obj.wNear * f, wFar: obj.wFar * f };
 }
 
 const PALETTE = [
@@ -278,12 +287,26 @@ export const useStore = create<AppState>((set, get) => {
       const curMeters = Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y);
       if (curMeters < 1e-9) return;
       const factor = knownMeters / curMeters;
-      // Rescale about the ORIGIN so the origin point stays fixed on the plan:
-      // newCenter = origin + (center - origin) * factor
+      // Everything scales about the ORIGIN so the origin stays fixed on the plan:
+      //   newCenter = origin + (center - origin) * factor
+      // Objects scale too, so already-placed geometry stays glued to plan
+      // features when the user re-scales a mis-scaled plan.
       const o = s.origin;
       const newCenter = add(o, scaleVec(sub(img.center, o), factor));
+      const objects = s.objects.map((obj) => scaleObjectAbout(obj, o, factor));
+      // Two-point scaling changes real-world size, but the plan shouldn't appear
+      // to grow/shrink on screen — compensate the view zoom by 1/factor and keep
+      // the origin pinned to its current screen position.
+      const v = s.view;
+      const ns = v.scale / factor;
+      const oStage = { x: o.x * PX_PER_M, y: o.y * PX_PER_M };
+      const before = rotate({ x: oStage.x * v.scale, y: oStage.y * v.scale }, v.rot);
+      const after = rotate({ x: oStage.x * ns, y: oStage.y * ns }, v.rot);
+      const view = { ...v, scale: ns, x: v.x + (before.x - after.x), y: v.y + (before.y - after.y) };
       withHistory(() => ({
         image: { ...img, mPerPx: img.mPerPx * factor, center: newCenter },
+        objects,
+        view,
         scaleDraft: null,
         tool: 'select',
       }));
@@ -461,6 +484,33 @@ export function makeArea(
     length: shape === 'rect' ? base : base * 1.4,
     wNear: shape === 'rect' ? base : base * 0.5,
     wFar: shape === 'rect' ? base : base * 1.4,
+    arcSteps: 1,
+    label: '',
+    color,
+  };
+}
+
+// A fan covering an axis-aligned world bounds box (drag-to-size). It starts as a
+// straight-sided box (wNear === wFar); the user then pulls the far/near widths to
+// make it a trapezoid. Origin sits at the middle of the near (min-x) edge.
+export function makeFanFromBounds(
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+  color: string,
+): AreaObj {
+  const w = maxY - minY;
+  return {
+    id: crypto.randomUUID(),
+    type: 'area',
+    shape: 'fan',
+    origin: { x: minX, y: (minY + maxY) / 2 },
+    rotationDeg: 0,
+    length: maxX - minX,
+    wNear: w,
+    wFar: w,
+    arcSteps: 1,
     label: '',
     color,
   };

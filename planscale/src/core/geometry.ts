@@ -139,6 +139,56 @@ export function areaCorners(area: {
   ];
 }
 
+// The closed world-space outline of an area, used for drawing and area math.
+// Rectangles and straight fans return the four trapezoid corners. A fan with
+// arcSteps>1 (and a genuinely wider far edge) bows its far edge into a circular
+// arc centered on the apex where the two sides converge — i.e. a constant
+// distance from the source — approximated by `arcSteps` segments. The near edge
+// and the two sides stay straight.
+export function areaOutline(area: {
+  origin: Vec2;
+  rotationDeg: number;
+  length: number;
+  wNear: number;
+  wFar: number;
+  shape?: 'rect' | 'fan';
+  arcSteps?: number;
+  nearArcSteps?: number;
+}): Vec2[] {
+  const toWorld = (p: Vec2): Vec2 => add(area.origin, rotate(p, area.rotationDeg));
+  const nl = { x: 0, y: -area.wNear / 2 };
+  const nr = { x: 0, y: area.wNear / 2 };
+  const fr = { x: area.length, y: area.wFar / 2 };
+  const fl = { x: area.length, y: -area.wFar / 2 };
+  const farSteps = Math.max(1, Math.round(area.arcSteps ?? 1));
+  const nearSteps = Math.max(1, Math.round(area.nearArcSteps ?? 1));
+  // Rounding needs an apex, which only exists when the far edge is genuinely
+  // wider than the near one (otherwise the sides are parallel).
+  const widens = area.wFar - area.wNear > 1e-6 * Math.max(1, area.length);
+  if (area.shape !== 'fan' || !widens || (farSteps < 2 && nearSteps < 2)) {
+    return [nl, nr, fr, fl].map(toWorld);
+  }
+  // Apex on the axis (behind the near edge) where the two sides meet. Both edges,
+  // if rounded, are circular arcs centered there (a constant distance from the
+  // source) spanning the same half-angle ±phi.
+  const apexX = -(area.wNear * area.length) / (area.wFar - area.wNear);
+  const phi = Math.atan2(area.wFar / 2, area.length - apexX);
+  const Rf = Math.hypot(area.length - apexX, area.wFar / 2);
+  const Rn = Math.hypot(apexX, area.wNear / 2);
+  const arc = (R: number, steps: number, startPos: boolean): Vec2[] => {
+    const out: Vec2[] = [];
+    for (let k = 0; k <= steps; k++) {
+      const t = startPos ? -phi + (2 * phi * k) / steps : phi - (2 * phi * k) / steps;
+      out.push({ x: apexX + R * Math.cos(t), y: R * Math.sin(t) });
+    }
+    return out;
+  };
+  // near: left(−phi) → right(+phi); far: right(+phi) → left(−phi)
+  const near = nearSteps >= 2 ? arc(Rn, nearSteps, true) : [nl, nr];
+  const far = farSteps >= 2 ? arc(Rf, farSteps, false) : [fr, fl];
+  return [...near, ...far].map(toWorld);
+}
+
 export function areaCenter(area: {
   origin: Vec2;
   rotationDeg: number;

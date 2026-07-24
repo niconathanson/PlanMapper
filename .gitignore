@@ -24,3 +24,6 @@ Thumbs.db
 # Vite / TS cache
 .vite/
 *.tsbuildinfo
+
+# stray debug screenshots dropped in the project root
+/*.png

@@ -2,7 +2,7 @@
 // coordinate export (CSV / clipboard).
 
 import type { ProjectData, SceneObject } from './types';
-import { toDisplay, areaCorners, pathLength, polygonArea, polygonPerimeter } from './geometry';
+import { toDisplay, areaOutline, pathLength, polygonArea, polygonPerimeter } from './geometry';
 import { formatLength, type UnitSystem, FT_PER_M } from './units';
 
 const EXT = '.planscale';
@@ -115,8 +115,8 @@ export function objectsToCsv(
           : `total run=${num(pathLength(pts), units)}`;
       rows.push(`${name},${o.type},,,,,"${extra}"`);
     } else if (o.type === 'area') {
-      const corners = areaCorners(o);
-      corners.forEach((c, i) => {
+      const outline = areaOutline(o);
+      outline.forEach((c, i) => {
         const d = toDisplay(c, frame);
         rows.push(`${name},area-${o.shape},${i + 1},${num(d.x, units)},${num(d.y, units)},,`);
       });
@@ -157,6 +157,51 @@ export function objectSummary(
         : `total run ${formatLength(pathLength(o.pts), units)}`;
     return `${name}:\n${lines.join('\n')}\n  ${foot}`;
   }
-  const corners = areaCorners(o);
-  return `${name} (${o.shape}):\n${corners.map((p, i) => `  ${i + 1}. ${c(p)}`).join('\n')}`;
+  const outline = areaOutline(o);
+  return `${name} (${o.shape}):\n${outline.map((p, i) => `  ${i + 1}. ${c(p)}`).join('\n')}`;
+}
+
+// ---- Vectorworks / Soundvision vertex export (.txt) ----
+// Emits the "; VECTORWORKS" header block followed by one entry per object:
+//   "Label","<name>"
+//   x,y,z          (meters, Y-up, relative to the origin; z always 0)
+//   ";"
+// Fans export their full outline including near/far arc points.
+export function objectsToVectorworks(
+  objects: SceneObject[],
+  frame: { origin: { x: number; y: number }; rotationDeg: number },
+): string {
+  const vtx = (p: { x: number; y: number }): string => {
+    const d = toDisplay(p, frame); // meters, Y-up
+    return `${d.x.toFixed(6)},${d.y.toFixed(6)},0.000000`;
+  };
+  const verts = (o: SceneObject): { x: number; y: number }[] => {
+    if (o.type === 'probe') return [o.p];
+    if (o.type === 'polygon' || o.type === 'path') return o.pts;
+    return areaOutline(o);
+  };
+  const lines: string[] = [
+    '"; VECTORWORKS"',
+    '";"',
+    '";   using Outside is front (white)"',
+    '";   using Name By Layer"',
+    '";   using Visible Entities"',
+    '";"',
+    '";"',
+    '";"',
+    '"; LengthUnit","m"',
+    '";"',
+  ];
+  for (const o of objects) {
+    const pts = verts(o);
+    if (!pts.length) continue;
+    lines.push(`"Label","${(o.label || 'None face').replace(/"/g, "'")}"`);
+    for (const p of pts) lines.push(vtx(p));
+    lines.push('";"');
+  }
+  return lines.join('\r\n') + '\r\n';
+}
+
+export function exportVectorworks(text: string, name = 'export') {
+  download(name + '.txt', text, 'text/plain');
 }

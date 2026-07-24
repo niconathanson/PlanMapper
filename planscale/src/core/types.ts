@@ -68,6 +68,11 @@ export interface AreaObj {
   length: number;
   wNear: number;
   wFar: number;
+  // Fan only: number of segments each edge is bowed into. 1 (or absent) = a
+  // straight edge (plain trapezoid); higher values round it into an arc centered
+  // on the fan apex. arcSteps = far edge, nearArcSteps = near edge (opt-in).
+  arcSteps?: number;
+  nearArcSteps?: number;
   label: string;
   color: string;
 }
