@@ -25,7 +25,7 @@ Grab the latest build from the [**Releases**](../../releases/latest) page:
 | Windows 10/11 | `PlanMapper_<version>_x64-setup.exe` | SmartScreen warning → **More info** → **Run anyway** |
 | macOS (Apple Silicon + Intel) | `PlanMapper_<version>_universal.dmg` | **Right-click** the app → **Open** → **Open** |
 
-Both are unsigned. I am not paying for developer liscenses for these because these are tools for my personal use - first. So each OS
+Both are unsigned. I am not paying for developer licenses for these because these are tools for my personal use - first. So each OS
 shows a scary-looking warning the first time. That's the only thing it means. After the
 first launch, both open normally.
 
