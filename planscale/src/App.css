@@ -40,6 +40,14 @@
   font-size: 18px;
   line-height: 1;
 }
+.topbar .filename {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .tbtn {
   border: 1px solid var(--border);
@@ -144,6 +152,16 @@
 .toolbtn.help {
   margin-top: auto; /* pin to the bottom of the rail */
   color: var(--muted);
+}
+/* Version readout, tucked under the Guide button at the foot of the rail. */
+.toolrail .version {
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+  user-select: text;
 }
 .toolbtn.help:hover {
   color: var(--accent);
@@ -409,16 +427,31 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.objrow .del {
+.del {
   border: none;
   background: transparent;
   color: var(--muted);
   padding: 2px 4px;
   border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
 }
-.objrow .del:hover {
+.del:hover:not(:disabled) {
   color: var(--danger);
   background: #fde8e8;
+}
+.del:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* extra (off-plan) lengths on a line */
+.extras-row select {
+  flex: 0 0 auto;
+  width: 64px;
+}
+.extras-row input[type='text'] {
+  flex: 1.2;
 }
 
 /* vertex table */
@@ -442,6 +475,10 @@
 .vtable th:first-child {
   text-align: left;
   color: var(--muted);
+}
+.vtable td:last-child {
+  padding: 3px 0 3px 2px;
+  width: 20px;
 }
 .vtable input {
   width: 84px;

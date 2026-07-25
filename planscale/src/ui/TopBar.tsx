@@ -1,6 +1,6 @@
 import { useStore } from '../core/store';
 import { Icon } from './icons';
-import { saveProject, openProject } from '../core/project';
+import { useProjectIO } from './useProjectIO';
 import { SnappingMenu } from './SnappingMenu';
 import type { UnitSystem } from '../core/units';
 
@@ -13,24 +13,7 @@ const UNIT_OPTS: { id: UnitSystem; label: string }[] = [
 
 export function TopBar({ onImport }: { onImport: () => void }) {
   const s = useStore();
-
-  const doSave = async () => {
-    const name = s.image?.name?.replace(/\.[^.]+$/, '') || 'plan';
-    const ok = await saveProject(s.toProject(), name);
-    if (ok) s.markSaved();
-  };
-  const doOpen = async () => {
-    if (s.dirty && !confirm('Discard unsaved changes and open a project?')) return;
-    const data = await openProject();
-    if (data) {
-      s.loadProject(data);
-      setTimeout(() => s.requestFit(), 50);
-    }
-  };
-  const doNew = () => {
-    if (s.dirty && !confirm('Discard unsaved changes and start a new project?')) return;
-    s.newProject();
-  };
+  const { doSave, doOpen, doNew } = useProjectIO();
 
   return (
     <div className="topbar">
@@ -45,8 +28,19 @@ export function TopBar({ onImport }: { onImport: () => void }) {
       <button className="tbtn" onClick={doOpen} title="Open a saved .planmapper project">
         {Icon.open()} Open
       </button>
-      <button className="tbtn" onClick={doSave} title="Save project">
+      <button
+        className="tbtn"
+        onClick={() => doSave()}
+        title={s.fileName ? `Save to ${s.fileName} (Ctrl+S)` : 'Save project (Ctrl+S)'}
+      >
         {Icon.save()} Save
+      </button>
+      <button
+        className="tbtn"
+        onClick={() => doSave(true)}
+        title="Save to a new file (Ctrl+Shift+S)"
+      >
+        Save as…
       </button>
       <button className="tbtn" onClick={doNew} title="New project">
         New
@@ -54,6 +48,11 @@ export function TopBar({ onImport }: { onImport: () => void }) {
 
       <div className="spacer" />
 
+      {s.fileName && (
+        <span className="filename" title={s.fileName}>
+          {s.fileName}
+        </span>
+      )}
       {s.dirty && <span className="dirty-dot" title="Unsaved changes">●</span>}
 
       <button className="tbtn" onClick={s.undo} disabled={s.past.length === 0} title="Undo (Ctrl+Z)">

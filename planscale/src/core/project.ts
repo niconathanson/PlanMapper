@@ -2,7 +2,14 @@
 // coordinate export (CSV / clipboard).
 
 import type { ProjectData, SceneObject } from './types';
-import { toDisplay, areaOutline, pathLength, polygonArea, polygonPerimeter } from './geometry';
+import {
+  toDisplay,
+  areaOutline,
+  pathLength,
+  polygonArea,
+  polygonPerimeter,
+  extrasTotal,
+} from './geometry';
 import { formatLength, type UnitSystem, FT_PER_M } from './units';
 
 const EXT = '.planmapper';
@@ -15,7 +22,18 @@ interface FilePickerWindow {
 interface FileSystemFileHandleLike {
   createWritable: () => Promise<{ write: (data: BlobPart) => Promise<void>; close: () => Promise<void> }>;
   getFile: () => Promise<File>;
+  requestPermission?: (opts: { mode: string }) => Promise<'granted' | 'denied' | 'prompt'>;
   name: string;
+}
+
+// The file the current project is bound to — set when it's opened or saved
+// through the file picker, so plain "Save" can write straight back to it and
+// only "Save as…" asks where to put it. Handles aren't serialisable, so this
+// lives here rather than in the store (which keeps the file *name* for display).
+let currentFile: FileSystemFileHandleLike | null = null;
+
+export function clearCurrentFile() {
+  currentFile = null;
 }
 
 function download(filename: string, content: string, mime: string) {
@@ -28,17 +46,29 @@ function download(filename: string, content: string, mime: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function saveProject(data: ProjectData, suggestedName = 'plan'): Promise<boolean> {
-  const json = JSON.stringify(data);
+// Write text to a user-chosen file.
+//
+// The desktop build runs in a WebView with no download manager, so an <a
+// download> click is silently dropped there — every "save" path must go through
+// showSaveFilePicker (which WebView2 does support). The anchor stays only as a
+// fallback for browsers without the File System Access API.
+// Returns false only when the user cancels the picker.
+async function saveTextFile(
+  filename: string,
+  content: string,
+  mime: string,
+  description: string,
+): Promise<boolean> {
+  const ext = filename.slice(filename.lastIndexOf('.'));
   const w = window as unknown as FilePickerWindow;
   if (w.showSaveFilePicker) {
     try {
       const handle = await w.showSaveFilePicker({
-        suggestedName: suggestedName + EXT,
-        types: [{ description: 'PlanMapper project', accept: { 'application/json': [EXT] } }],
+        suggestedName: filename,
+        types: [{ description, accept: { [mime]: [ext] } }],
       });
       const writable = await handle.createWritable();
-      await writable.write(json);
+      await writable.write(content);
       await writable.close();
       return true;
     } catch (e) {
@@ -46,11 +76,59 @@ export async function saveProject(data: ProjectData, suggestedName = 'plan'): Pr
       // fall through to download
     }
   }
-  download(suggestedName + EXT, json, 'application/json');
+  download(filename, content, mime);
   return true;
 }
 
-export async function openProject(): Promise<ProjectData | null> {
+async function writeTo(handle: FileSystemFileHandleLike, json: string): Promise<void> {
+  if (handle.requestPermission) {
+    const p = await handle.requestPermission({ mode: 'readwrite' });
+    if (p !== 'granted') throw new Error('write permission denied');
+  }
+  const writable = await handle.createWritable();
+  await writable.write(json);
+  await writable.close();
+}
+
+// Save the project. Without `saveAs` this writes straight back to the file the
+// project came from (if there is one); otherwise it asks where to put it.
+// Returns the file name written, or null if the user cancelled.
+export async function saveProject(
+  data: ProjectData,
+  suggestedName = 'plan',
+  saveAs = false,
+): Promise<string | null> {
+  const json = JSON.stringify(data);
+  if (!saveAs && currentFile) {
+    try {
+      await writeTo(currentFile, json);
+      return currentFile.name;
+    } catch {
+      // handle went stale (file moved/deleted, permission revoked) → ask again
+      currentFile = null;
+    }
+  }
+  const filename = suggestedName + EXT;
+  const w = window as unknown as FilePickerWindow;
+  if (w.showSaveFilePicker) {
+    try {
+      const handle = await w.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: 'PlanMapper project', accept: { 'application/json': [EXT] } }],
+      });
+      await writeTo(handle, json);
+      currentFile = handle;
+      return handle.name;
+    } catch (e) {
+      if ((e as DOMException)?.name === 'AbortError') return null;
+      // fall through to download
+    }
+  }
+  download(filename, json, 'application/json');
+  return filename;
+}
+
+export async function openProject(): Promise<{ data: ProjectData; name: string } | null> {
   const w = window as unknown as FilePickerWindow;
   if (w.showOpenFilePicker) {
     try {
@@ -59,13 +137,15 @@ export async function openProject(): Promise<ProjectData | null> {
       });
       const file = await handle.getFile();
       const text = await file.text();
-      return JSON.parse(text) as ProjectData;
+      const data = JSON.parse(text) as ProjectData;
+      currentFile = handle; // subsequent "Save" writes back here
+      return { data, name: handle.name };
     } catch (e) {
       if ((e as DOMException)?.name === 'AbortError') return null;
       throw e;
     }
   }
-  // fallback: hidden input
+  // fallback: hidden input (no handle, so "Save" will have to ask where)
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -74,7 +154,8 @@ export async function openProject(): Promise<ProjectData | null> {
       const file = input.files?.[0];
       if (!file) return resolve(null);
       const text = await file.text();
-      resolve(JSON.parse(text) as ProjectData);
+      currentFile = null;
+      resolve({ data: JSON.parse(text) as ProjectData, name: file.name });
     };
     input.click();
   });
@@ -109,10 +190,20 @@ export function objectsToCsv(
           `${name},${o.type},${i + 1},${num(d.x, units)},${num(d.y, units)},${i > 0 ? num(seg, units) : ''},`,
         );
       }
+      if (o.type === 'path') {
+        for (const e of o.extras ?? []) {
+          rows.push(
+            `${name},extra,${e.at ?? ''},,,${num(e.meters, units)},"${(e.label || 'extra length').replace(/"/g, "'")}"`,
+          );
+        }
+      }
+      const extras = o.type === 'path' ? extrasTotal(o.extras) : 0;
       const extra =
         o.type === 'polygon'
           ? `perimeter=${num(polygonPerimeter(pts), units)};area=${(polygonArea(pts) * (units === 'm' ? 1 : FT_PER_M * FT_PER_M)).toFixed(2)} ${unit}2`
-          : `total run=${num(pathLength(pts), units)}`;
+          : extras > 0
+            ? `on plan=${num(pathLength(pts), units)};extra=${num(extras, units)};total run=${num(pathLength(pts) + extras, units)}`
+            : `total run=${num(pathLength(pts), units)}`;
       rows.push(`${name},${o.type},,,,,"${extra}"`);
     } else if (o.type === 'area') {
       const outline = areaOutline(o);
@@ -129,7 +220,7 @@ export function objectsToCsv(
 }
 
 export function exportCsv(csv: string, name = 'coordinates') {
-  download(name + '.csv', csv, 'text/csv');
+  void saveTextFile(name + '.csv', csv, 'text/csv', 'CSV spreadsheet');
 }
 
 export async function copyToClipboard(text: string): Promise<void> {
@@ -151,10 +242,18 @@ export function objectSummary(
   if (o.type === 'probe') return `${name}: ${c(o.p)}`;
   if (o.type === 'polygon' || o.type === 'path') {
     const lines = o.pts.map((p, i) => `  ${i + 1}. ${c(p)}`);
+    if (o.type === 'polygon')
+      return `${name}:\n${lines.join('\n')}\n  perimeter ${formatLength(polygonPerimeter(o.pts), units)}`;
+    const onPlan = pathLength(o.pts);
+    const extras = extrasTotal(o.extras);
+    for (const e of o.extras ?? [])
+      lines.push(
+        `  + ${e.label || 'extra length'}${e.at ? ` (at pt ${e.at})` : ''}: ${formatLength(e.meters, units)}`,
+      );
     const foot =
-      o.type === 'polygon'
-        ? `perimeter ${formatLength(polygonPerimeter(o.pts), units)}`
-        : `total run ${formatLength(pathLength(o.pts), units)}`;
+      extras > 0
+        ? `on plan ${formatLength(onPlan, units)}  ·  extra ${formatLength(extras, units)}  ·  total run ${formatLength(onPlan + extras, units)}`
+        : `total run ${formatLength(onPlan, units)}`;
     return `${name}:\n${lines.join('\n')}\n  ${foot}`;
   }
   const outline = areaOutline(o);
@@ -203,5 +302,5 @@ export function objectsToVectorworks(
 }
 
 export function exportVectorworks(text: string, name = 'export') {
-  download(name + '.txt', text, 'text/plain');
+  void saveTextFile(name + '.txt', text, 'text/plain', 'Vectorworks / Soundvision vertices');
 }

@@ -64,6 +64,10 @@ export function Toolbar({ onHelp }: { onHelp: () => void }) {
         {Icon.help()}
         <span>Guide</span>
       </button>
+      {/* So people can tell at a glance whether their copy is out of date. */}
+      <span className="version" title={`PlanMapper version ${__APP_VERSION__}`}>
+        v{__APP_VERSION__}
+      </span>
     </div>
   );
 }

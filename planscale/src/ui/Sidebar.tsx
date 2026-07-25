@@ -1,6 +1,15 @@
 import { useStore } from '../core/store';
 import { LengthField, NumField } from './NumberField';
-import { toDisplay, fromDisplay, pathLength, polygonArea, polygonPerimeter, segmentLengths, areaOutline } from '../core/geometry';
+import {
+  toDisplay,
+  fromDisplay,
+  pathLength,
+  polygonArea,
+  polygonPerimeter,
+  segmentLengths,
+  areaOutline,
+  extrasTotal,
+} from '../core/geometry';
 import type { OriginFrame } from '../core/geometry';
 import { fmtLen, fmtArea } from '../core/readout';
 import {
@@ -11,7 +20,15 @@ import {
   objectsToVectorworks,
   exportVectorworks,
 } from '../core/project';
-import type { AreaObj, PathObj, PolygonObj, ProbePoint, SceneObject, Vec2 } from '../core/types';
+import type {
+  AreaObj,
+  ExtraLength,
+  PathObj,
+  PolygonObj,
+  ProbePoint,
+  SceneObject,
+  Vec2,
+} from '../core/types';
 
 export function Sidebar({ onImport }: { onImport: () => void }) {
   const s = useStore();
@@ -225,6 +242,10 @@ function PolyEditor({ obj, frame }: { obj: PolygonObj | PathObj; frame: OriginFr
   const s = useStore();
   const segs = segmentLengths(obj.pts);
   const total = obj.type === 'polygon' ? polygonPerimeter(obj.pts) : pathLength(obj.pts);
+  const extras = obj.type === 'path' ? obj.extras ?? [] : [];
+  const extra = extrasTotal(extras);
+  const minPts = obj.type === 'polygon' ? 3 : 2;
+  const drawing = s.draft?.editId === obj.id;
   const updatePt = (i: number, world: Vec2) => {
     const next = obj.pts.slice();
     next[i] = world;
@@ -239,6 +260,7 @@ function PolyEditor({ obj, frame }: { obj: PolygonObj | PathObj; frame: OriginFr
             <th>X</th>
             <th>Y</th>
             <th>seg</th>
+            <th />
           </tr>
         </thead>
         <tbody>
@@ -254,15 +276,59 @@ function PolyEditor({ obj, frame }: { obj: PolygonObj | PathObj; frame: OriginFr
                   <LengthField meters={d.y} units={s.units} onCommit={(my) => updatePt(i, fromDisplay({ x: d.x, y: my }, frame))} />
                 </td>
                 <td>{i > 0 ? fmtLen(segs[i - 1], s.units) : '—'}</td>
+                <td>
+                  <button
+                    className="del"
+                    title={
+                      obj.pts.length <= minPts
+                        ? `A ${obj.type === 'polygon' ? 'polygon' : 'line'} needs at least ${minPts} points`
+                        : `Delete point ${i + 1}`
+                    }
+                    disabled={obj.pts.length <= minPts}
+                    onClick={() => s.deleteVertex(obj.id, i)}
+                  >
+                    ✕
+                  </button>
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      <div className="btn-row" style={{ marginTop: 8 }}>
+        <button
+          className={`tbtn ${drawing ? 'primary' : ''}`}
+          onClick={() => (drawing ? s.commitDraft() : s.resumeDraft(obj.id, 'end'))}
+          title="Keep placing points from the last one (Enter or right-click to finish)"
+        >
+          {drawing ? 'Done adding' : 'Add points'}
+        </button>
+        {!drawing && (
+          <button
+            className="tbtn"
+            onClick={() => s.resumeDraft(obj.id, 'start')}
+            title="Keep placing points from the first one, extending the other end"
+          >
+            Add at start
+          </button>
+        )}
+      </div>
+      {drawing && (
+        <p className="hint" style={{ marginTop: 6 }}>
+          Click on the plan to keep adding points. Enter or right-click finishes · Backspace
+          removes the last one · Esc cancels.
+        </p>
+      )}
+
+      {obj.type === 'path' && <ExtrasEditor obj={obj} extras={extras} />}
+
       <div className="readout" style={{ marginTop: 8 }}>
         {obj.type === 'polygon'
           ? `Perimeter: ${fmtLen(total, s.units)}\nArea: ${fmtArea(polygonArea(obj.pts), s.units)}`
-          : `Total run: ${fmtLen(total, s.units)}`}
+          : extra > 0
+            ? `On plan: ${fmtLen(total, s.units)}\nExtra: ${fmtLen(extra, s.units)}\nTotal run: ${fmtLen(total + extra, s.units)}`
+            : `Total run: ${fmtLen(total, s.units)}`}
       </div>
       <div className="btn-row" style={{ marginTop: 8 }}>
         <button
@@ -274,6 +340,68 @@ function PolyEditor({ obj, frame }: { obj: PolygonObj | PathObj; frame: OriginFr
         </button>
       </div>
     </>
+  );
+}
+
+// Off-plan lengths on a line: vertical drops from the ceiling, service loops —
+// anything that adds cable but doesn't show in an overhead view. Each can be
+// pinned to a point so it reads in the right place on the plan.
+function ExtrasEditor({ obj, extras }: { obj: PathObj; extras: ExtraLength[] }) {
+  const s = useStore();
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="field" style={{ marginBottom: 4 }}>
+        <label>Extra lengths</label>
+        <button
+          className="tbtn"
+          style={{ padding: '2px 8px' }}
+          onClick={() => s.addExtraLength(obj.id)}
+          title="Add a length that isn't drawn on the plan (a vertical run, slack…)"
+        >
+          + Add
+        </button>
+      </div>
+      {extras.length === 0 && (
+        <p className="hint">
+          Add vertical runs up/down from the ceiling, or any slack, to include them in the total.
+        </p>
+      )}
+      {extras.map((e) => (
+        <div className="field row2 extras-row" key={e.id} style={{ gap: 4 }}>
+          <input
+            type="text"
+            value={e.label}
+            placeholder="Vertical run"
+            style={{ minWidth: 0 }}
+            onChange={(ev) => s.updateExtraLength(obj.id, e.id, { label: ev.target.value })}
+          />
+          <LengthField
+            meters={e.meters}
+            units={s.units}
+            onCommit={(m) => s.updateExtraLength(obj.id, e.id, { meters: m })}
+          />
+          <select
+            value={e.at ?? ''}
+            title="Show this length at a point on the plan"
+            onChange={(ev) =>
+              s.updateExtraLength(obj.id, e.id, {
+                at: ev.target.value === '' ? undefined : Number(ev.target.value),
+              })
+            }
+          >
+            <option value="">—</option>
+            {obj.pts.map((_, i) => (
+              <option key={i} value={i + 1}>
+                pt {i + 1}
+              </option>
+            ))}
+          </select>
+          <button className="del" title="Remove" onClick={() => s.deleteExtraLength(obj.id, e.id)}>
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -346,7 +474,7 @@ function ObjectListPanel({ frame }: { frame: OriginFrame }) {
       const d = toDisplay(o.p, frame);
       return `${fmtLen(d.x, s.units)}, ${fmtLen(d.y, s.units)}`;
     }
-    if (o.type === 'path') return fmtLen(pathLength(o.pts), s.units);
+    if (o.type === 'path') return fmtLen(pathLength(o.pts) + extrasTotal(o.extras), s.units);
     if (o.type === 'polygon') return fmtArea(polygonArea(o.pts), s.units);
     return `${fmtLen(o.length, s.units)}×${fmtLen(o.wNear, s.units)}`;
   };

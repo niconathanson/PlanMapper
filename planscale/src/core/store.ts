@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   AreaObj,
+  ExtraLength,
   PlanImage,
   ProjectData,
   SceneObject,
@@ -30,6 +31,13 @@ export interface DrawDraft {
   shape?: 'rect' | 'fan';
   pts: Vec2[]; // committed vertices (world meters)
   cursor?: Vec2; // live cursor position (world meters), for rubber-band preview
+  // Set when the draft is *extending an existing* line/polygon rather than
+  // drawing a new one (see resumeDraft): the id of the object being extended,
+  // how many of its points the draft started with, and — when picking up from
+  // the first point — that the draft runs backwards along the stored order.
+  editId?: string;
+  baseCount?: number;
+  editReversed?: boolean;
 }
 
 // When the origin moves O -> O' and a rotated image exists, the image is drawn
@@ -53,8 +61,30 @@ function recenterImageForOrigin(
 function scaleObjectAbout(obj: SceneObject, o: Vec2, f: number): SceneObject {
   const sp = (p: Vec2): Vec2 => ({ x: o.x + (p.x - o.x) * f, y: o.y + (p.y - o.y) * f });
   if (obj.type === 'probe') return { ...obj, p: sp(obj.p) };
-  if (obj.type === 'polygon' || obj.type === 'path') return { ...obj, pts: obj.pts.map(sp) };
+  // Extra lengths are real-world distances too, so a re-scale must carry them.
+  if (obj.type === 'path')
+    return {
+      ...obj,
+      pts: obj.pts.map(sp),
+      extras: obj.extras?.map((e) => ({ ...e, meters: e.meters * f })),
+    };
+  if (obj.type === 'polygon') return { ...obj, pts: obj.pts.map(sp) };
   return { ...obj, origin: sp(obj.origin), length: obj.length * f, wNear: obj.wNear * f, wFar: obj.wFar * f };
+}
+
+// Shift the vertex an extra length is pinned to by `shift` (points added ahead
+// of it), dropping the pin if it no longer lands on a real vertex.
+function remapExtras(
+  extras: ExtraLength[] | undefined,
+  shift: number,
+  count: number,
+): ExtraLength[] | undefined {
+  if (!extras?.length) return extras;
+  return extras.map((e) => {
+    if (e.at === undefined) return e;
+    const at = e.at + shift;
+    return at >= 1 && at <= count ? { ...e, at } : { ...e, at: undefined };
+  });
 }
 
 const PALETTE = [
@@ -106,6 +136,7 @@ interface AppState {
   draft: DrawDraft | null;
   colorCursor: number;
   dirty: boolean; // unsaved changes
+  fileName: string | null; // the .planmapper file this project is bound to
   nudging: boolean; // true while a run of arrow-key nudges is coalescing
   fitVersion: number; // bump to request the canvas re-fit the view
 
@@ -140,11 +171,17 @@ interface AppState {
   applyScale: (knownMeters: number) => void; // rescale image so a..b == knownMeters
 
   startDraft: (tool: ToolId, shape?: 'rect' | 'fan') => void;
+  resumeDraft: (id: string, from?: 'end' | 'start') => void; // keep adding points to an existing line
   addDraftPoint: (world: Vec2) => void;
   setDraftCursor: (world: Vec2 | undefined) => void;
   popDraftPoint: () => void;
   commitDraft: () => void;
   cancelDraft: () => void;
+
+  deleteVertex: (id: string, index: number) => void; // drop one point from a line/polygon
+  addExtraLength: (id: string, at?: number) => void; // off-plan length on a line
+  updateExtraLength: (id: string, extraId: string, patch: Partial<ExtraLength>) => void;
+  deleteExtraLength: (id: string, extraId: string) => void;
 
   addObject: (obj: SceneObject) => void;
   updateObject: (id: string, patch: Partial<SceneObject>) => void;
@@ -157,10 +194,10 @@ interface AppState {
 
   toggleTheme: () => void;
 
-  loadProject: (data: ProjectData) => void;
+  loadProject: (data: ProjectData, fileName?: string) => void;
   toProject: () => ProjectData;
   newProject: () => void;
-  markSaved: () => void;
+  markSaved: (fileName?: string) => void;
 
   undo: () => void;
   redo: () => void;
@@ -225,6 +262,7 @@ export const useStore = create<AppState>((set, get) => {
     draft: null,
     colorCursor: 0,
     dirty: false,
+    fileName: null,
     nudging: false,
     fitVersion: 0,
     past: [],
@@ -313,6 +351,28 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     startDraft: (tool, shape) => set({ tool, draft: { tool, shape, pts: [] } }),
+    // Pick drawing back up on an existing line/polygon. The draft is seeded with
+    // the object's points so snapping, the rubber band and the running readout
+    // all behave exactly as they did while it was first drawn; committing
+    // replaces the object in place rather than adding a new one. `from: 'start'`
+    // extends the other end by walking the points backwards.
+    resumeDraft: (id, from = 'end') => {
+      const obj = get().objects.find((o) => o.id === id);
+      if (!obj || (obj.type !== 'path' && obj.type !== 'polygon')) return;
+      const reversed = from === 'start';
+      set({
+        tool: obj.type,
+        selectedId: id,
+        scaleDraft: null,
+        draft: {
+          tool: obj.type,
+          pts: reversed ? obj.pts.slice().reverse() : obj.pts.slice(),
+          editId: id,
+          baseCount: obj.pts.length,
+          editReversed: reversed,
+        },
+      });
+    },
     addDraftPoint: (world) =>
       set((s) => (s.draft ? { draft: { ...s.draft, pts: [...s.draft.pts, world] } } : {})),
     setDraftCursor: (world) =>
@@ -325,6 +385,26 @@ export const useStore = create<AppState>((set, get) => {
       const s = get();
       const d = s.draft;
       if (!d) return;
+      // Extending an existing line/polygon: swap its points in place so it keeps
+      // its id, name, colour and position in the object list.
+      if (d.editId) {
+        const pts = d.editReversed ? d.pts.slice().reverse() : d.pts;
+        const shift = d.editReversed ? d.pts.length - (d.baseCount ?? d.pts.length) : 0;
+        const min = d.tool === 'polygon' ? 3 : 2;
+        if (pts.length >= min) {
+          withHistory((st) => ({
+            objects: st.objects.map((o) => {
+              if (o.id !== d.editId) return o;
+              if (o.type === 'path')
+                return { ...o, pts, extras: remapExtras(o.extras, shift, pts.length) };
+              if (o.type === 'polygon') return { ...o, pts };
+              return o;
+            }),
+          }));
+        }
+        set({ draft: null, selectedId: d.editId });
+        return;
+      }
       const color = get().nextColor();
       const id = crypto.randomUUID();
       let obj: SceneObject | null = null;
@@ -339,6 +419,63 @@ export const useStore = create<AppState>((set, get) => {
       set({ draft: null, selectedId: obj ? id : null });
     },
     cancelDraft: () => set({ draft: null }),
+
+    // Remove a single vertex. Lines keep at least 2 points and polygons 3, so the
+    // object never collapses into something undrawable — delete the whole object
+    // instead at that point.
+    deleteVertex: (id, index) =>
+      withHistory((s) => ({
+        objects: s.objects.map((o) => {
+          if (o.id !== id || (o.type !== 'path' && o.type !== 'polygon')) return o;
+          const min = o.type === 'polygon' ? 3 : 2;
+          if (o.pts.length <= min || index < 0 || index >= o.pts.length) return o;
+          const pts = o.pts.filter((_, i) => i !== index);
+          if (o.type === 'path') {
+            // An extra pinned to the deleted point loses its pin but keeps its
+            // length — the run is still that long.
+            const extras = o.extras?.map((e) =>
+              e.at === undefined || e.at <= index
+                ? e
+                : e.at === index + 1
+                  ? { ...e, at: undefined }
+                  : { ...e, at: e.at - 1 },
+            );
+            return { ...o, pts, extras };
+          }
+          return { ...o, pts };
+        }),
+      })),
+
+    addExtraLength: (id, at) =>
+      withHistory((s) => ({
+        objects: s.objects.map((o) =>
+          o.id === id && o.type === 'path'
+            ? {
+                ...o,
+                extras: [
+                  ...(o.extras ?? []),
+                  { id: crypto.randomUUID(), label: 'Vertical run', meters: 0, at },
+                ],
+              }
+            : o,
+        ),
+      })),
+    updateExtraLength: (id, extraId, patch) =>
+      withHistory((s) => ({
+        objects: s.objects.map((o) =>
+          o.id === id && o.type === 'path'
+            ? { ...o, extras: (o.extras ?? []).map((e) => (e.id === extraId ? { ...e, ...patch } : e)) }
+            : o,
+        ),
+      })),
+    deleteExtraLength: (id, extraId) =>
+      withHistory((s) => ({
+        objects: s.objects.map((o) =>
+          o.id === id && o.type === 'path'
+            ? { ...o, extras: (o.extras ?? []).filter((e) => e.id !== extraId) }
+            : o,
+        ),
+      })),
 
     addObject: (obj) => {
       withHistory((s) => ({ objects: [...s.objects, obj] }));
@@ -390,8 +527,9 @@ export const useStore = create<AppState>((set, get) => {
         return { theme };
       }),
 
-    loadProject: (data) =>
+    loadProject: (data, fileName) =>
       set({
+        fileName: fileName ?? null,
         units: data.units,
         image: data.image,
         origin: data.origin,
@@ -420,6 +558,7 @@ export const useStore = create<AppState>((set, get) => {
     },
     newProject: () =>
       set({
+        fileName: null,
         image: null,
         origin: { x: 0, y: 0 },
         originRotationDeg: 0,
@@ -433,7 +572,7 @@ export const useStore = create<AppState>((set, get) => {
         future: [],
         dirty: false,
       }),
-    markSaved: () => set({ dirty: false }),
+    markSaved: (fileName) => set(fileName ? { dirty: false, fileName } : { dirty: false }),
 
     undo: () => {
       const s = get();

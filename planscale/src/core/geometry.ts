@@ -12,7 +12,7 @@
 //           with Y negated so "up" is positive, optionally rotated by the origin
 //           axis angle.
 
-import type { Vec2 } from './types';
+import type { ExtraLength, Vec2 } from './types';
 
 // 1 meter == this many stage units. Keeps object coordinates in a comfortable
 // numeric range regardless of the real-world size of the plan.
@@ -92,6 +92,12 @@ export function pathLength(pts: Vec2[]): number {
   let total = 0;
   for (let i = 1; i < pts.length; i++) total += dist(pts[i - 1], pts[i]);
   return total;
+}
+
+// Sum of the off-plan lengths (vertical runs, slack) attached to a line.
+export function extrasTotal(extras?: ExtraLength[]): number {
+  if (!extras?.length) return 0;
+  return extras.reduce((a, e) => a + e.meters, 0);
 }
 
 export function segmentLengths(pts: Vec2[]): number[] {

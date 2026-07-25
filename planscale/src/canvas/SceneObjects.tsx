@@ -5,6 +5,7 @@ import { fmtLen, fmtArea, fmtCoord } from '../core/readout';
 import {
   polygonArea,
   pathLength,
+  extrasTotal,
 } from '../core/geometry';
 import type { OriginFrame } from '../core/geometry';
 import type { UnitSystem } from '../core/units';
@@ -22,6 +23,7 @@ interface Ctx {
   snap: (p: Vec2) => Vec2; // grid-snap a world point (identity if snapping off)
   onSelect: (id: string) => void;
   onUpdate: (id: string, patch: Partial<SceneObject>) => void;
+  onDeleteVertex: (id: string, index: number) => void; // Alt-click a vertex handle
 }
 
 const toStage = (p: Vec2) => [p.x * PX_PER_M, p.y * PX_PER_M];
@@ -122,10 +124,11 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
     const pts = obj.pts;
     const flat = pts.flatMap(toStage);
     const closed = obj.type === 'polygon';
+    const extras = obj.type === 'path' ? obj.extras ?? [] : [];
     const metric =
       obj.type === 'polygon'
         ? `area ${fmtArea(polygonArea(pts), ctx.units)}  ·  ${pts.length} pts`
-        : `run ${fmtLen(pathLength(pts), ctx.units)}  ·  ${pts.length} pts`;
+        : `run ${fmtLen(pathLength(pts) + extrasTotal(extras), ctx.units)}  ·  ${pts.length} pts`;
     // label anchor = centroid
     const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
     const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
@@ -167,6 +170,12 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
               stroke={obj.color}
               strokeWidth={sw}
               draggable
+              // Alt-click deletes this vertex (same as the ✕ in the point table).
+              onClick={(e) => {
+                if (!e.evt.altKey) return;
+                e.cancelBubble = true;
+                ctx.onDeleteVertex(obj.id, i);
+              }}
               onDragMove={(e) => {
                 const node = e.target;
                 const np = ctx.snap({ x: node.x() / PX_PER_M, y: node.y() / PX_PER_M });
@@ -175,6 +184,22 @@ function ObjectNode({ obj, ctx }: { obj: SceneObject; ctx: Ctx }) {
                 next[i] = np;
                 ctx.onUpdate(obj.id, { pts: next } as Partial<SceneObject>);
               }}
+            />
+          ))}
+        {/* Off-plan lengths pinned to a vertex read next to that point. */}
+        {extras
+          .filter((e) => e.at !== undefined && e.at >= 1 && e.at <= pts.length)
+          .map((e) => (
+            <ScreenLabel
+              key={e.id}
+              x={pts[e.at! - 1].x * PX_PER_M}
+              y={pts[e.at! - 1].y * PX_PER_M}
+              viewScale={ctx.viewScale}
+              viewRot={ctx.viewRot}
+              color={obj.color}
+              bg={ctx.labelBg}
+              stroke={ctx.labelStroke}
+              text={`↕ ${fmtLen(e.meters, ctx.units)}${e.label ? '  ' + e.label : ''}`}
             />
           ))}
         <ScreenLabel

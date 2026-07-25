@@ -325,6 +325,21 @@ const STEPS: Step[] = [
             corners to resize, and a fan's edges can round into arcs
           </li>
         </ul>
+        <p>Select a line or polygon and its point list opens on the right, where you can:</p>
+        <ul>
+          <li>
+            Delete a single point with the <b>✕</b> beside it (or <K>Alt</K>-click its handle on the
+            plan)
+          </li>
+          <li>
+            Press <b>Add points</b> to pick drawing back up from the last point — or{' '}
+            <b>Add at start</b> to extend the other end
+          </li>
+          <li>
+            On a line, add <b>Extra lengths</b> for runs the overhead view can't show — a vertical
+            drop from the ceiling, a riser, some slack — and they count toward the total run
+          </li>
+        </ul>
         <p className="hint">
           <K>S</K> is Select: drag to move, drag handles to reshape, <K>Delete</K> to remove,{' '}
           <K>Ctrl</K>+<K>Z</K> to undo.
@@ -362,8 +377,10 @@ const STEPS: Step[] = [
       <>
         <ul>
           <li>
-            <b>Save</b> writes a <code>.planmapper</code> project — plan image included, so it
-            reopens exactly as you left it
+            <b>Save</b> (<K>Ctrl</K>+<K>S</K>) writes a <code>.planmapper</code> project — the plan
+            image is embedded in the file, so it reopens exactly as you left it on any machine.{' '}
+            <b>Save as…</b> puts it somewhere new; after that, Save writes straight back to that
+            file
           </li>
           <li>
             <b>Export CSV</b> for a spreadsheet, or <b>Copy all coords</b> to paste anywhere.{' '}

@@ -575,7 +575,9 @@ export function CanvasStage({
         </Layer>
         <Layer>
           <SceneObjects
-            objects={s.objects}
+            // The object being extended is drawn by the draft overlay instead,
+            // so it isn't painted twice.
+            objects={s.draft?.editId ? s.objects.filter((o) => o.id !== s.draft!.editId) : s.objects}
             ctx={{
               units: s.units,
               frame: { origin: s.origin, rotationDeg: s.originRotationDeg },
@@ -588,6 +590,7 @@ export function CanvasStage({
               snap: gridSnap,
               onSelect: (id: string) => s.select(id),
               onUpdate: (id: string, patch: Partial<SceneObject>) => s.updateObject(id, patch),
+              onDeleteVertex: (id: string, i: number) => s.deleteVertex(id, i),
             }}
           />
         </Layer>

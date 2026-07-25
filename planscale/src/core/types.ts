@@ -47,10 +47,22 @@ export interface PolygonObj {
   color: string;
 }
 
+// An off-plan length added to a line's total run — a vertical drop from the
+// ceiling, a service loop, a riser — anything real cable length that the
+// overhead plan can't show. Optional `at` pins it to a vertex (1-based) so it
+// reads on the canvas at the right spot.
+export interface ExtraLength {
+  id: string;
+  label: string;
+  meters: number;
+  at?: number; // 1-based vertex index, or undefined for "not tied to a point"
+}
+
 export interface PathObj {
   id: string;
   type: 'path';
   pts: Vec2[]; // open polyline (cable run)
+  extras?: ExtraLength[]; // vertical runs / slack added to the total
   label: string;
   color: string;
 }
