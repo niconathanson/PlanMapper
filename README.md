@@ -29,6 +29,9 @@ Both are unsigned. I am not paying for developer licenses for these because thes
 shows a scary-looking warning the first time. That's the only thing it means. After the
 first launch, both open normally.
 
+What changed in each version is in the [**changelog**](CHANGELOG.md). The version you're
+running is shown at the bottom of the tool rail, under **Guide**.
+
 ## How it works
 
 The whole workflow is four steps, and the app walks you through them on first run
